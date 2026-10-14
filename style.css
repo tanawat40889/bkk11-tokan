@@ -20,7 +20,7 @@
   --note-fg: #047857;
   --radius: 12px;
   --gutter: 14px;
-  font-family: "Noto Sans Thai", "Sarabun", system-ui, -apple-system, sans-serif;
+  font-family: 'Prompt', system-ui, -apple-system, sans-serif;
 }
 
 :root[data-theme="dark"] {
