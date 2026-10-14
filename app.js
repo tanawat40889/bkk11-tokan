@@ -42,6 +42,27 @@ async function fetchMembers(token) {
   }
 }
 
+const THEME_KEY = 'tokan_theme';
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+function renderThemeButtons() {
+  const label = currentTheme() === 'dark' ? '☀ โหมดสว่าง' : '🌙 โหมดมืด';
+  document.querySelectorAll('[data-theme-toggle]').forEach(b => { b.textContent = label; });
+}
+
+function initTheme() {
+  renderThemeButtons();
+  document.querySelectorAll('[data-theme-toggle]').forEach(b => b.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    renderThemeButtons();
+  }));
+}
+
 let allRecords = [];
 let scope = null;   // { phak: 'all'|string[], khet: 'all'|string[] }
 let profile = null; // { name, po, level, phak, khet, tambon, moo }
@@ -58,6 +79,7 @@ function showLogin(msg = '') {
 }
 
 async function init() {
+  initTheme();
   document.getElementById('loginForm').addEventListener('submit', onLogin);
   document.getElementById('logoutBtn').addEventListener('click', () => {
     clearSession();

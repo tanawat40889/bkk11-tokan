@@ -1,17 +1,48 @@
 :root {
+  color-scheme: light;
   --bg: #f4f5f7;
   --card-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
   --border: #e2e4e9;
   --text: #1f2430;
   --text-dim: #6b7280;
+  --text-faint: #9ca3af;
   --primary: #2563eb;
   --primary-dim: #eef2ff;
   --danger: #dc2626;
+  --danger-border: #fecaca;
+  --danger-bg: #fee2e2;
   --warn: #b45309;
   --warn-bg: #fef3c7;
+  --chip-bg: #eef0f4;
+  --note-bg: #ecfdf5;
+  --note-fg: #047857;
   --radius: 12px;
   --gutter: 14px;
   font-family: "Noto Sans Thai", "Sarabun", system-ui, -apple-system, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1218;
+  --card-bg: #1a1f2a;
+  --surface: #1a1f2a;
+  --surface-2: #222836;
+  --border: #2c3342;
+  --text: #e6e9ef;
+  --text-dim: #9aa3b2;
+  --text-faint: #6b7280;
+  --primary: #5b8def;
+  --primary-dim: #1d2a4a;
+  --danger: #f87171;
+  --danger-border: #5b2a2a;
+  --danger-bg: #3a1c1c;
+  --warn: #fbbf24;
+  --warn-bg: #3a2e12;
+  --chip-bg: #2a3040;
+  --note-bg: #123226;
+  --note-fg: #5fd3a0;
 }
 
 * { box-sizing: border-box; }
@@ -125,7 +156,7 @@ body {
   display: none;
   flex-direction: column;
   gap: 6px;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px;
@@ -189,7 +220,7 @@ body {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   font-size: 16px; /* prevents iOS auto-zoom on focus */
   font-family: inherit;
   color: var(--text);
@@ -198,7 +229,7 @@ body {
 
 .filters button {
   cursor: pointer;
-  background: #fff;
+  background: var(--surface);
 }
 
 .filters button:hover {
@@ -304,7 +335,7 @@ body {
 }
 
 .pill-fa {
-  background: #eef0f4;
+  background: var(--chip-bg);
   color: var(--text-dim);
 }
 
@@ -348,7 +379,7 @@ body {
   font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #eef0f4;
+  background: var(--chip-bg);
   color: var(--text-dim);
 }
 
@@ -358,14 +389,14 @@ body {
 }
 
 .badge.badge-note {
-  background: #ecfdf5;
-  color: #047857;
+  background: var(--note-bg);
+  color: var(--note-fg);
 }
 
 .card-note-preview {
   font-size: 0.78rem;
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--note-fg);
+  background: var(--note-bg);
   border-radius: 8px;
   padding: 6px 8px;
   margin-top: 4px;
@@ -420,13 +451,13 @@ body {
 
 .note-item-time {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-faint);
   margin-top: 2px;
 }
 
 .note-item button {
   align-self: flex-end;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--danger-border);
   background: none;
   color: var(--danger);
   cursor: pointer;
@@ -437,7 +468,7 @@ body {
 }
 
 .note-item button:hover {
-  background: #fee2e2;
+  background: var(--danger-bg);
 }
 
 .empty-state {
@@ -539,7 +570,7 @@ dialog#detailModal::backdrop {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  background: #f8f9fb;
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
@@ -603,7 +634,7 @@ dialog#detailModal::backdrop {
   font-family: inherit;
   font-size: 0.9rem;
   cursor: pointer;
-  background: #fff;
+  background: var(--surface);
   min-height: 44px;
 }
 
@@ -615,7 +646,7 @@ dialog#detailModal::backdrop {
 
 .note-editor-actions .btn-delete {
   color: var(--danger);
-  border-color: #fecaca;
+  border-color: var(--danger-border);
 }
 
 /* ---------- Tablet / desktop enhancements ---------- */
@@ -700,6 +731,8 @@ dialog#detailModal::backdrop {
   padding: var(--gutter);
 }
 
+.login-view[hidden] { display: none; }
+
 .login-card {
   width: 100%;
   max-width: 360px;
@@ -756,11 +789,34 @@ dialog#detailModal::backdrop {
 .logout-btn {
   margin-left: auto;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   border-radius: 8px;
   padding: 6px 10px;
   font-family: inherit;
   font-size: 0.8rem;
   color: var(--text-dim);
   cursor: pointer;
+}
+
+/* ---------- Theme toggle ---------- */
+
+.theme-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.topbar .theme-btn { margin-left: auto; }
+.topbar .theme-btn + .logout-btn { margin-left: 0; }
+
+.login-view .theme-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }

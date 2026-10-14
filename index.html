@@ -4,11 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ทำเนียบสมาชิก</title>
+<script>
+  try {
+    var t = localStorage.getItem('tokan_theme');
+    if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <section id="loginView" class="login-view" hidden>
+  <button type="button" class="theme-btn" data-theme-toggle></button>
   <form id="loginForm" class="login-card" autocomplete="off">
     <h1>ทำเนียบสมาชิก</h1>
     <label>ชื่อ
@@ -27,6 +35,7 @@
   <header class="topbar">
     <h1>ทำเนียบสมาชิก</h1>
     <div class="scope-badge" id="scopeBadge"></div>
+    <button type="button" class="theme-btn" data-theme-toggle></button>
     <button type="button" id="logoutBtn" class="logout-btn">ออกจากระบบ</button>
   </header>
 
