@@ -818,13 +818,31 @@ dialog#detailModal::backdrop {
 .login-view .theme-btn {
   position: absolute;
   top: 12px;
+  left: 12px;
+}
+
+.corner-logo {
+  position: absolute;
+  top: 10px;
   right: 12px;
+  height: 32px;
+  width: auto;
 }
 
-.login-logo {
-  align-self: center;
-  width: 150px;
-  height: 150px;
+.topbar-logo {
+  height: 32px;
+  width: auto;
+  flex-shrink: 0;
 }
 
-.login-card h1 { text-align: center; }
+/* มือถือ: โลโก้ชิดมุมขวาบนของแถบ เนื้อหาอื่นเว้นที่ด้านขวาไว้ ไม่ให้ทับ */
+@media (max-width: 640px) {
+  .topbar { padding-right: calc(var(--gutter) + 92px); }
+  .topbar-logo {
+    position: absolute;
+    top: 14px;
+    right: var(--gutter);
+  }
+  .topbar .theme-btn { margin-left: 0; }
+  .topbar .logout-btn { margin-left: 0; }
+}
