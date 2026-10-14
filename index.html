@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ทำเนียบสมาชิก</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app" hidden>
+
+  <header class="topbar">
+    <h1>ทำเนียบสมาชิก</h1>
+    <div class="scope-badge" id="scopeBadge"></div>
+  </header>
+
+  <section class="filters">
+    <div class="filters-row1">
+      <input type="search" id="searchBox" placeholder="ค้นหาชื่อ / นามสกุล...">
+      <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false" aria-controls="filterPanel">
+        <span id="filterToggleLabel">แสดงตัวกรอง</span>
+        <span class="filter-count" id="filterCount" hidden>0</span>
+        <span class="chevron" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div class="filter-panel" id="filterPanel">
+      <select id="sortOrder">
+        <option value="area">เรียงลำดับ: ตามพื้นที่</option>
+        <option value="name">เรียงลำดับ: ตามตัวอักษร</option>
+      </select>
+      <select id="filterKhet"><option value="">เขต: ทั้งหมด</option></select>
+      <select id="filterTambon"><option value="">ตำบล: ทั้งหมด</option></select>
+      <select id="filterMoo"><option value="">หมู่: ทั้งหมด</option></select>
+      <select id="filterFa"><option value="">ฝ่าย: ทั้งหมด</option></select>
+      <select id="filterPo"><option value="">ตำแหน่ง: ทั้งหมด</option></select>
+
+      <label class="checkbox-filter">
+        <input type="checkbox" id="filterNoPhoto">
+        ขาดรูปถ่ายเท่านั้น
+      </label>
+      <label class="checkbox-filter">
+        <input type="checkbox" id="filterHasNote">
+        มีบันทึกเท่านั้น
+      </label>
+
+      <div class="filter-panel-actions">
+        <button id="resetFilters" type="button" class="btn-outline">ล้างตัวกรอง</button>
+        <button id="closeFilterPanel" type="button" class="btn-solid">ปิดตัวกรอง</button>
+      </div>
+    </div>
+
+    <span class="result-count" id="resultCount"></span>
+  </section>
+
+  <div class="list-wrap">
+    <main id="cardGrid" class="friend-list"></main>
+    <nav id="azIndex" class="az-index" aria-label="ดัชนีตัวอักษร"></nav>
+  </div>
+
+  <section class="notes-section">
+    <h2>บันทึกช่วยจำทั้งหมด (<span id="notesCount">0</span>)</h2>
+    <div id="notesList" class="notes-list"></div>
+  </section>
+
+</div>
+
+<dialog id="detailModal">
+  <form method="dialog" class="modal-form">
+    <button type="button" class="modal-close" id="modalClose">&times;</button>
+    <div id="modalBody"></div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
