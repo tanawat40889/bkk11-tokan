@@ -8,11 +8,26 @@
 </head>
 <body>
 
+<section id="loginView" class="login-view" hidden>
+  <form id="loginForm" class="login-card" autocomplete="off">
+    <h1>ทำเนียบสมาชิก</h1>
+    <label>ชื่อ
+      <input id="loginName" type="text" required maxlength="100" autocomplete="off">
+    </label>
+    <label>รหัสสมาชิก
+      <input id="loginCode" type="password" inputmode="numeric" pattern="[0-9]{6,8}" required maxlength="8" autocomplete="off">
+    </label>
+    <div id="loginError" class="login-error" role="alert" hidden></div>
+    <button type="submit">เข้าสู่ระบบ</button>
+  </form>
+</section>
+
 <div id="app" hidden>
 
   <header class="topbar">
     <h1>ทำเนียบสมาชิก</h1>
     <div class="scope-badge" id="scopeBadge"></div>
+    <button type="button" id="logoutBtn" class="logout-btn">ออกจากระบบ</button>
   </header>
 
   <section class="filters">

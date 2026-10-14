@@ -689,3 +689,78 @@ dialog#detailModal::backdrop {
 
   .modal-form { padding: 20px 22px 22px; }
 }
+
+/* ---------- Login ---------- */
+
+.login-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gutter);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-card h1 {
+  font-size: 1.3rem;
+  margin: 0 0 4px;
+}
+
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.login-card input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px; /* prevents iOS auto-zoom on focus */
+  font-family: inherit;
+  color: var(--text);
+  min-height: 44px;
+}
+
+.login-card button {
+  min-height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.login-card button:disabled { opacity: 0.6; cursor: default; }
+
+.login-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.logout-btn {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}

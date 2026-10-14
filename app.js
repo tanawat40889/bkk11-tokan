@@ -2,18 +2,42 @@ const SUPABASE_URL = 'https://cqdzfsucpivsgznfpjxl.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_XkUBjE3M7HUiuDv7YwsbKA_mSu0ToEc';
 const PAGE_SIZE = 1000; // PostgREST จำกัดแถวต่อ request
 const NOTES_KEY = 'tokan_notes_v1';
+const SESSION_KEY = 'tokan_session_v1';
 
-async function fetchMembers() {
+const LEVEL_LABEL = { all: 'ทุกภาค', phak: 'ภาค', khet: 'เขต', tambon: 'ตำบล', moo: 'หมู่' };
+
+function loadSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
+}
+function saveSession(s) { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
+
+async function refreshSession(s) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: s.refresh_token }),
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return { ...s, access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMembers(token) {
   const rows = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/members?select=*&order=mt_co`, {
       headers: {
         apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
+        Authorization: `Bearer ${token}`,
         Range: `${from}-${from + PAGE_SIZE - 1}`,
       },
     });
-    if (!res.ok) throw new Error(`members ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(`members ${res.status}`), { status: res.status });
     const page = await res.json();
     rows.push(...page);
     if (page.length < PAGE_SIZE) return rows;
@@ -21,79 +45,105 @@ async function fetchMembers() {
 }
 
 let allRecords = [];
-let scope = null; // { phak: 'all'|string[], khet: 'all'|string[] } | null (no access)
-let notes = {};   // { [mt_co]: { name, text, updatedAt } }
+let scope = null;   // { phak: 'all'|string[], khet: 'all'|string[] }
+let profile = null; // { name, po, level, phak, khet, tambon, moo }
+let notes = {};     // { [mt_co]: { name, text, updatedAt } }
 
 init();
 
+function showLogin(msg = '') {
+  document.getElementById('app').hidden = true;
+  document.getElementById('loginView').hidden = false;
+  const err = document.getElementById('loginError');
+  err.textContent = msg;
+  err.hidden = !msg;
+}
+
 async function init() {
-  const requested = resolveScope();
-  if (requested === null) {
-    // Invalid or missing access param: render absolutely nothing.
+  document.getElementById('loginForm').addEventListener('submit', onLogin);
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    clearSession();
+    location.reload();
+  });
+
+  let s = loadSession();
+  if (s && s.expires_at * 1000 < Date.now() + 60000) s = await refreshSession(s);
+  if (!s) {
+    clearSession();
+    showLogin();
+    return;
+  }
+  saveSession(s);
+  await start(s);
+}
+
+async function onLogin(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: document.getElementById('loginName').value,
+        code: document.getElementById('loginCode').value,
+      }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.session) {
+      showLogin(d.error && d.error !== 'server' ? d.error : 'เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง');
+      return;
+    }
+    const s = { ...d.session, profile: d.profile };
+    saveSession(s);
+    document.getElementById('loginCode').value = '';
+    await start(s);
+  } catch {
+    showLogin('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function start(s) {
+  let records;
+  try {
+    records = await fetchMembers(s.access_token);
+  } catch (e) {
+    clearSession();
+    showLogin(e.status === 401 ? 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าใหม่' : 'โหลดข้อมูลไม่สำเร็จ');
+    return;
+  }
+  if (!records.length) {
+    clearSession();
+    showLogin('ไม่มีสิทธิ์ดูข้อมูล');
     return;
   }
 
-  let records;
-  try {
-    records = await fetchMembers();
-  } catch (e) {
-    return; // fail silently/blank rather than leaking error details
-  }
-
-  const validPhaks = new Set(records.map(r => r.phak_nt));
-  const validKhets = new Set(records.map(r => r.sh_nt));
-
-  const phakScope = requested.phak === 'all' ? 'all' : requested.phak.filter(p => validPhaks.has(p));
-  const khetScope = requested.khet === 'all' ? 'all' : requested.khet.filter(k => validKhets.has(k));
-
-  if (phakScope !== 'all' && phakScope.length === 0) return; // none of the requested ภาค exist -> invalid access
-  if (khetScope !== 'all' && khetScope.length === 0) return; // none of the requested เขต exist -> invalid access
-
-  scope = { phak: phakScope, khet: khetScope };
-
-  allRecords = records.filter(r => {
-    const phakOk = scope.phak === 'all' || scope.phak.includes(r.phak_nt);
-    const khetOk = scope.khet === 'all' || scope.khet.includes(r.sh_nt);
-    return phakOk && khetOk;
-  });
-
-  if (allRecords.length === 0) return;
-
+  // สิทธิ์จริงถูกกรองโดย RLS ฝั่ง server แล้ว ส่วนนี้ใช้กำหนดการแสดงผลเท่านั้น
+  profile = s.profile;
+  const lvl = profile.level;
+  scope = {
+    phak: lvl === 'all' ? 'all' : [profile.phak],
+    khet: lvl === 'all' || lvl === 'phak' ? 'all' : [profile.khet],
+  };
+  allRecords = records;
   notes = loadNotes();
 
+  document.getElementById('loginView').hidden = true;
   document.getElementById('app').hidden = false;
   renderScopeBadge();
   populateFilterOptions();
-  bindEvents();
+  if (!bindEvents.done) { bindEvents(); bindEvents.done = true; }
   applyFilters();
   renderNotesList();
 }
 
-function resolveScope() {
-  const params = new URLSearchParams(location.search);
-  const hasPhak = params.has('phak');
-  const hasKhet = params.has('khet');
-  if (!hasPhak && !hasKhet) return null;
-
-  const phak = hasPhak ? parseListParam(params.get('phak')) : 'all';
-  const khet = hasKhet ? parseListParam(params.get('khet')) : 'all';
-  if (phak === null || khet === null) return null;
-  return { phak, khet };
-}
-
-function parseListParam(raw) {
-  const v = raw.trim();
-  if (!v) return null;
-  if (v.toLowerCase() === 'all') return 'all';
-  const list = v.split(',').map(s => s.trim()).filter(Boolean);
-  return list.length ? list : null;
-}
-
 function renderScopeBadge() {
   const badge = document.getElementById('scopeBadge');
-  const phakText = scope.phak === 'all' ? 'ภาค: ทั้งหมด' : `ภาค ${scope.phak.join(', ')}`;
-  const khetText = scope.khet === 'all' ? 'เขต: ทั้งหมด' : `เขต ${scope.khet.join(', ')}`;
-  badge.textContent = `สิทธิ์: ${phakText} · ${khetText}`;
+  const where = profile.level === 'all' ? LEVEL_LABEL.all : `${LEVEL_LABEL[profile.level]}${profile[profile.level]}`;
+  badge.textContent = `${profile.name} · ${where}`;
 }
 
 function personId(rec) { return String(rec.mt_co); }
