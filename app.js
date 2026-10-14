@@ -6,25 +6,23 @@ const SESSION_KEY = 'tokan_session_v1';
 
 const LEVEL_LABEL = { all: 'ทุกภาค', phak: 'ภาค', khet: 'เขต', tambon: 'ตำบล', moo: 'หมู่' };
 
+// เก็บใน localStorage เพื่อให้ login ค้างไว้จนกว่าจะออกจากระบบหรือเปลี่ยนเครื่อง
 function loadSession() {
-  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch { return null; }
 }
-function saveSession(s) { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
-function clearSession() { sessionStorage.removeItem(SESSION_KEY); }
+function saveSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
+// คืน null เมื่อ server ปฏิเสธ refresh token; ถ้าเน็ตมีปัญหาจะ throw (ห้ามล้าง session)
 async function refreshSession(s) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: s.refresh_token }),
-    });
-    if (!res.ok) return null;
-    const d = await res.json();
-    return { ...s, access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
-  } catch {
-    return null;
-  }
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: s.refresh_token }),
+  });
+  if (!res.ok) return null;
+  const d = await res.json();
+  return { ...s, access_token: d.access_token, refresh_token: d.refresh_token, expires_at: d.expires_at };
 }
 
 async function fetchMembers(token) {
@@ -67,7 +65,14 @@ async function init() {
   });
 
   let s = loadSession();
-  if (s && s.expires_at * 1000 < Date.now() + 60000) s = await refreshSession(s);
+  if (s && s.expires_at * 1000 < Date.now() + 60000) {
+    try {
+      s = await refreshSession(s);
+    } catch {
+      showLogin('เชื่อมต่อไม่ได้ ลองรีเฟรชหน้าอีกครั้ง');
+      return;
+    }
+  }
   if (!s) {
     clearSession();
     showLogin();
@@ -106,11 +111,18 @@ async function onLogin(e) {
   }
 }
 
-async function start(s) {
+async function start(s, retried = false) {
   let records;
   try {
     records = await fetchMembers(s.access_token);
   } catch (e) {
+    if (e.status === 401 && !retried) {
+      const next = await refreshSession(s).catch(() => null);
+      if (next) {
+        saveSession(next);
+        return start(next, true);
+      }
+    }
     clearSession();
     showLogin(e.status === 401 ? 'หมดเวลาเข้าสู่ระบบ กรุณาเข้าใหม่' : 'โหลดข้อมูลไม่สำเร็จ');
     return;
