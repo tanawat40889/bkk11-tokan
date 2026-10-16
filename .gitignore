@@ -2,3 +2,5 @@
 .claude/
 consolidated_data.json
 db/
+CLAUDE.md
+deploy.sh
