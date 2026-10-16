@@ -172,6 +172,16 @@ async function start(s, retried = false) {
   if (!bindEvents.done) { bindEvents(); bindEvents.done = true; }
   applyFilters();
   renderNotesList();
+  openDeepLink();
+}
+
+// ?m=<รหัสสมาชิก> เปิดรายละเอียดของสมาชิกคนนั้นทันที (ใช้จากแอป BKK11-YMDGoogleMaps)
+function openDeepLink() {
+  const m = new URLSearchParams(location.search).get('m');
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  const rec = allRecords.find(r => String(r.mt_co) === m);
+  if (rec) openDetail(rec);
 }
 
 function renderScopeBadge() {
