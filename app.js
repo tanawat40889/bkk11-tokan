@@ -81,6 +81,10 @@ function showLogin(msg = '') {
 async function init() {
   initTheme();
   document.getElementById('loginForm').addEventListener('submit', onLogin);
+  // สมาชิกใช้รหัสตัวเลข (แป้นตัวเลข) ส่วน staff ใช้รหัสผ่านที่มีตัวอักษร
+  document.getElementById('loginName').addEventListener('input', e => {
+    document.getElementById('loginCode').inputMode = /^staff/i.test(e.target.value.trim()) ? 'text' : 'numeric';
+  });
   document.getElementById('logoutBtn').addEventListener('click', () => {
     clearSession();
     location.reload();
@@ -100,8 +104,33 @@ async function init() {
     showLogin();
     return;
   }
+  if (isSessionExpired(s)) {
+    clearSession();
+    showLogin('หมดเวลาประจำวัน กรุณาเข้าสู่ระบบใหม่');
+    return;
+  }
   saveSession(s);
   await start(s);
+}
+
+// staff ต้องเข้าสู่ระบบใหม่ทุกวัน: server ส่ง session_until (สิ้นวันเวลาไทย) มาให้
+// RLS บังคับที่ฐานข้อมูลอยู่แล้ว ส่วนนี้แค่ล้างหน้าจอและพากลับไปหน้า login
+function isSessionExpired(s) {
+  const until = s?.profile?.session_until;
+  return !!until && Date.now() >= Date.parse(until);
+}
+
+function watchSessionExpiry(s) {
+  const until = s?.profile?.session_until;
+  if (!until) return;
+  const expire = () => {
+    if (!isSessionExpired(loadSession() ?? s)) return;
+    clearSession();
+    location.reload();
+  };
+  // ตั้งเวลาไว้ตอนสิ้นวัน และเช็คซ้ำเมื่อกลับมาเปิดแท็บ (iPad หลับ/สลับแอปแล้ว timer อาจหยุด)
+  setTimeout(expire, Math.max(0, Math.min(Date.parse(until) - Date.now(), 2 ** 31 - 1)));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) expire(); });
 }
 
 async function onLogin(e) {
@@ -164,6 +193,7 @@ async function start(s, retried = false) {
   };
   allRecords = records;
   notes = loadNotes();
+  watchSessionExpiry(s);
 
   document.getElementById('loginView').hidden = true;
   document.getElementById('app').hidden = false;
