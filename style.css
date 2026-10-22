@@ -61,11 +61,9 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 16px var(--gutter) 8px;
-  position: sticky;
-  top: 0;
+  padding: 16px calc(var(--gutter) + 98px) 8px var(--gutter);  /* ขวาเว้นที่ให้โลโก้ */
+  position: relative;
   background: var(--bg);
-  z-index: 5;
 }
 
 .topbar h1 {
@@ -90,7 +88,7 @@ body {
   gap: 8px;
   padding: 0 var(--gutter) 12px;
   position: sticky;
-  top: 44px;
+  top: 0;
   background: var(--bg);
   z-index: 4;
 }
@@ -649,7 +647,7 @@ dialog#detailModal::backdrop {
   border-color: var(--danger-border);
 }
 
-/* ---------- Tablet / desktop enhancements ---------- */
+/* ---------- Tablet (iPad portrait + landscape) and up ---------- */
 
 @media (min-width: 641px) {
   :root { --gutter: 24px; }
@@ -657,6 +655,81 @@ dialog#detailModal::backdrop {
   .topbar h1 { font-size: 1.4rem; }
   .scope-badge { font-size: 0.85rem; }
 
+  /* ตัวกรองยังพับเก็บได้ แต่เปิดออกเป็นตาราง 3 คอลัมน์ */
+  .filter-panel.open {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 10px;
+    align-items: center;
+    padding: 12px;
+  }
+  .filter-panel-actions { grid-column: 1 / -1; }
+
+  /* รายชื่อ 2 คอลัมน์ อ่านลงตามคอลัมน์ ป้ายหัวข้อคร่อมทั้งสองคอลัมน์ */
+  .list-wrap { max-width: 1100px; margin: 0 auto; }
+  .friend-list { display: block; column-count: 2; column-gap: 32px; }
+  .friend-row { break-inside: avoid; }
+  .letter-label,
+  .friend-list .empty-state { column-span: all; }
+
+  .friend-row:hover { background: var(--primary-dim); }
+
+  .note-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .note-item button { align-self: auto; }
+
+  dialog#detailModal {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: min(560px, 92vw);
+    max-height: 85vh;
+    border-radius: var(--radius);
+  }
+
+  .modal-form { padding: 20px 22px 22px; }
+}
+
+/* iPad เป็นจอสัมผัส: ขยายตัวอักษรเล็กน้อย และให้ดัชนี ก-ฮ กดง่ายขึ้น */
+@media (min-width: 641px) and (pointer: coarse) {
+  html { font-size: 17px; }
+  .az-item { padding: 0 10px; }
+}
+
+/* แนวนอน (iPad landscape / จอกว้าง): รายละเอียดเป็นแผงด้านขวา ไม่บังรายชื่อ */
+@media (min-width: 1024px) and (orientation: landscape) {
+  :root { --drawer-w: 440px; }
+
+  dialog#detailModal {
+    inset: 0 0 0 auto;
+    margin: 0;
+    width: var(--drawer-w);
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border-left: 1px solid var(--border);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    z-index: 20;
+  }
+
+  #app.has-drawer { padding-right: var(--drawer-w); }
+  .has-drawer .list-wrap { max-width: none; margin: 0; }
+  .has-drawer .friend-list { column-count: 1; }
+  .has-drawer .az-index { right: calc(var(--drawer-w) + 2px); }
+
+  .friend-row.selected {
+    background: var(--primary-dim);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+}
+
+/* เดสก์ท็อปที่ใช้เมาส์: ตัวกรองแสดงเป็นแถวตลอดเวลา */
+@media (min-width: 1280px) and (pointer: fine) {
   .filters {
     flex-direction: row;
     flex-wrap: wrap;
@@ -691,34 +764,6 @@ dialog#detailModal::backdrop {
   .checkbox-filter { white-space: nowrap; }
 
   .result-count { margin-left: auto; }
-
-  .list-wrap {
-    max-width: 720px;
-    margin: 0 auto;
-  }
-
-  .friend-row:hover {
-    background: var(--primary-dim);
-  }
-
-  .note-item {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .note-item button { align-self: auto; }
-
-  dialog#detailModal {
-    position: fixed;
-    inset: 0;
-    margin: auto;
-    width: min(480px, 92vw);
-    max-height: 85vh;
-    border-radius: var(--radius);
-  }
-
-  .modal-form { padding: 20px 22px 22px; }
 }
 
 /* ---------- Login ---------- */
@@ -830,19 +875,15 @@ dialog#detailModal::backdrop {
 }
 
 .topbar-logo {
+  position: absolute;
+  top: 14px;
+  right: var(--gutter);
   height: 32px;
   width: auto;
-  flex-shrink: 0;
 }
 
-/* มือถือ: โลโก้ชิดมุมขวาบนของแถบ เนื้อหาอื่นเว้นที่ด้านขวาไว้ ไม่ให้ทับ */
+/* มือถือ: ปุ่มชิดซ้ายต่อจากป้ายสิทธิ์ (โลโก้ชิดมุมขวาบนเหมือนทุกขนาดจอ) */
 @media (max-width: 640px) {
-  .topbar { padding-right: calc(var(--gutter) + 92px); }
-  .topbar-logo {
-    position: absolute;
-    top: 14px;
-    right: var(--gutter);
-  }
   .topbar .theme-btn { margin-left: 0; }
   .topbar .logout-btn { margin-left: 0; }
 }

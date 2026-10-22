@@ -273,7 +273,8 @@ function bindEvents() {
     updateDependentFilters();
     applyFilters();
   });
-  document.getElementById('modalClose').addEventListener('click', () => document.getElementById('detailModal').close());
+  document.getElementById('modalClose').addEventListener('click', closeDetail);
+  bindDetailEvents();
 
   document.getElementById('filterToggle').addEventListener('click', () => {
     setFilterPanelOpen(!document.getElementById('filterPanel').classList.contains('open'));
@@ -433,6 +434,8 @@ const GO_SHORT = {
 function buildCard(rec) {
   const el = document.createElement('article');
   el.className = 'friend-row';
+  el.dataset.id = personId(rec);
+  if (currentRec && personId(currentRec) === personId(rec) && isDrawerMode()) el.classList.add('selected');
   el.addEventListener('click', () => openDetail(rec));
 
   const note = notes[personId(rec)];
@@ -468,7 +471,46 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// แนวนอนบนจอกว้าง (iPad landscape, เดสก์ท็อป): รายละเอียดเป็นแผงด้านขวา ไม่ใช่ modal ทับรายชื่อ
+// ต้องตรงกับ media query ใน style.css
+const drawerMq = matchMedia('(min-width: 1024px) and (orientation: landscape)');
+const isDrawerMode = () => drawerMq.matches;
+let currentRec = null;
+
+function markSelectedRow() {
+  document.querySelectorAll('.friend-row.selected').forEach(el => el.classList.remove('selected'));
+  if (!currentRec || !isDrawerMode()) return;
+  document.querySelector(`.friend-row[data-id="${currentRec.mt_co}"]`)?.classList.add('selected');
+}
+
+function closeDetail() {
+  document.getElementById('detailModal').close();
+}
+
+function bindDetailEvents() {
+  const modal = document.getElementById('detailModal');
+  // 'close' ถูกยิงแบบ async: ถ้าเพิ่งเปิดรายละเอียดใหม่ทันที (เช่น หมุนจอ) อย่าล้างสถานะ
+  modal.addEventListener('close', () => {
+    if (modal.open) return;
+    currentRec = null;
+    document.getElementById('app').classList.remove('has-drawer');
+    markSelectedRow();
+  });
+  // dialog แบบไม่ modal ไม่ปิดด้วย Esc เอง
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && modal.open && isDrawerMode()) closeDetail();
+  });
+  // หมุน iPad ระหว่าง modal <-> แผงด้านข้าง: เปิดใหม่ให้เป็นโหมดที่ตรงกับหน้าจอ
+  drawerMq.addEventListener('change', () => {
+    if (!modal.open || !currentRec) return;
+    const rec = currentRec;
+    modal.close();
+    openDetail(rec);
+  });
+}
+
 function openDetail(rec) {
+  currentRec = rec;
   const id = personId(rec);
   const modal = document.getElementById('detailModal');
   const body = document.getElementById('modalBody');
@@ -541,7 +583,13 @@ function openDetail(rec) {
     });
   });
 
-  if (!modal.open) modal.showModal();
+  if (!modal.open) {
+    if (isDrawerMode()) modal.show();
+    else modal.showModal();
+  }
+  document.getElementById('app').classList.toggle('has-drawer', isDrawerMode());
+  modal.scrollTop = 0;
+  markSelectedRow();
 }
 
 function loadNotes() {
