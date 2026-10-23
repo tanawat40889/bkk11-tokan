@@ -28,14 +28,14 @@ async function refreshSession(s) {
 async function fetchMembers(token) {
   const rows = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/members?select=*&order=mt_co`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/tokan?select=*&order=mt_co`, {
       headers: {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${token}`,
         Range: `${from}-${from + PAGE_SIZE - 1}`,
       },
     });
-    if (!res.ok) throw Object.assign(new Error(`members ${res.status}`), { status: res.status });
+    if (!res.ok) throw Object.assign(new Error(`tokan ${res.status}`), { status: res.status });
     const page = await res.json();
     rows.push(...page);
     if (page.length < PAGE_SIZE) return rows;
