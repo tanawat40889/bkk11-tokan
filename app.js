@@ -91,6 +91,9 @@ async function init() {
     location.reload();
   });
 
+  const invite = takeInviteToken();
+  if (invite && await redeemInvite(invite)) return;
+
   let s = loadSession();
   if (s && s.expires_at * 1000 < Date.now() + 60000) {
     try {
@@ -112,6 +115,42 @@ async function init() {
   }
   saveSession(s);
   await start(s);
+}
+
+// ---------- ลิงก์เข้าระบบ (invite link) ----------
+// หัวหน้าสร้างลิงก์ให้คนในพื้นที่ตัวเอง (ปุ่มในรายละเอียดของแต่ละคน) ลิงก์เก็บ token ไว้หลัง # จึงไม่ถูกส่งไปกับ request ใดๆ
+// และใช้ได้ครั้งเดียว เปิดแล้วเข้าระบบทันที ผูกกับเครื่องนี้ (session เดิมใน localStorage)
+function takeInviteToken() {
+  const m = /^#i=([A-Za-z0-9_-]{20,64})$/.exec(location.hash);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);  // ไม่ทิ้ง token ไว้ใน URL/ประวัติเบราว์เซอร์
+  return m[1];
+}
+
+// true = จัดการเสร็จแล้ว (เข้าสำเร็จ หรือแสดงหน้า login พร้อมข้อความ), false = ผู้ใช้เลือกไม่สลับบัญชี ให้ไปต่อตามปกติ
+async function redeemInvite(token) {
+  const cur = loadSession();
+  const hasLive = !!cur && !isSessionExpired(cur);
+  if (hasLive && !confirm('ลิงก์นี้จะเข้าระบบเป็นบัญชีของอีกคน และออกจากบัญชีปัจจุบันบนเครื่องนี้\nต้องการดำเนินการต่อหรือไม่?')) return false;
+  BKKLoader.show('กำลังเปิดลิงก์เข้าระบบ…');
+  let msg = 'เปิดลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite: token }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.session) {
+      const s = { ...d.session, profile: d.profile };
+      saveSession(s);
+      await start(s);
+      return true;
+    }
+    if (d.error && d.error !== 'server') msg = d.error;
+  } catch { msg = 'เชื่อมต่อไม่ได้ ลองเปิดลิงก์อีกครั้ง'; }
+  showLogin(msg);
+  return true;
 }
 
 // staff ต้องเข้าสู่ระบบใหม่ทุกวัน: server ส่ง session_until (สิ้นวันเวลาไทย) มาให้
@@ -543,6 +582,114 @@ function bindDetailEvents() {
   });
 }
 
+// ---------- แชร์ลิงก์เข้าระบบ ----------
+// ตำแหน่ง -> ระดับสิทธิ์ (ต้องตรงกับ levelOf ใน Edge Function `login` ฝั่ง server เป็นตัวตัดสินจริง ตรงนี้ใช้แค่บอกผู้ใช้ล่วงหน้า)
+const LEVEL_RANK = { moo: 1, tambon: 2, khet: 3, phak: 4, all: 5 };
+function levelOfPo(po) {
+  if (!po) return null;
+  if (po.includes('รวมภาค')) return 'all';
+  if (po.includes('ภาค')) return 'phak';
+  if (po.includes('เขต') || po.includes('ฝ่าย')) return 'khet';
+  if (po.includes('ตำบล')) return 'tambon';
+  if (po.includes('หมู่')) return 'moo';
+  return null;
+}
+function jwtClaims(tok) {
+  try {
+    const b = String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b + '='.repeat((4 - (b.length % 4)) % 4)), c => c.charCodeAt(0))));
+  } catch { return {}; }
+}
+const myMtCo = () => Number(jwtClaims(loadSession()?.access_token).app_metadata?.mt_co) || null;
+
+function inviteSectionHtml(rec) {
+  if (!profile || profile.staff || myMtCo() === rec.mt_co) return '';
+  const lv = levelOfPo(rec.po_nt);
+  let reason = '';
+  if (!lv) reason = 'คนนี้ไม่มีตำแหน่ง จึงเข้าระบบไม่ได้';
+  else if (LEVEL_RANK[lv] > LEVEL_RANK[profile.level]) reason = 'ตำแหน่งของคนนี้สูงกว่าคุณ จึงออกลิงก์ให้ไม่ได้';
+  return `
+    <div class="invite-section">
+      <div class="invite-title">ลิงก์เข้าระบบ</div>
+      <p class="invite-hint">${reason ? escapeHtml(reason) : 'สร้างลิงก์ส่งให้คนนี้ กดแล้วเข้าระบบได้ทันที ไม่ต้องพิมพ์ชื่อหรือรหัส'}</p>
+      <button type="button" class="invite-btn" id="inviteBtn" ${reason ? 'disabled' : ''}>🔗 สร้างลิงก์เข้าระบบ</button>
+      <div class="invite-result" id="inviteResult" hidden></div>
+    </div>`;
+}
+
+async function requestInvite(mtCo, retried = false) {
+  const s = loadSession();
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'invite', mt_co: mtCo }),
+    });
+  } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(s).catch(() => null);
+    if (next) { saveSession(next); return requestInvite(mtCo, true); }
+  }
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error && d.error !== 'server' ? d.error : 'สร้างลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+  return d;
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }
+  const ta = Object.assign(document.createElement('textarea'), { value: text });
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* ignore */ }
+  ta.remove();
+  return ok;
+}
+
+function showInviteResult(out, d) {
+  const url = `${location.origin}${location.pathname}?openExternalBrowser=1#i=${d.token}`;
+  const until = new Date(d.expires_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+  const text = `🔑 ลิงก์เข้าระบบโทกังรวมภาคกรุงเทพ 11\nสำหรับ ${d.target.name}\nกดลิงก์เพื่อเข้าใช้งานได้เลย (ใช้ได้ครั้งเดียว ถึงวันที่ ${until}) กรุณาอย่าส่งต่อให้ผู้อื่น\n${url}`;
+  out.hidden = false;
+  out.innerHTML = `
+    <p class="invite-ok">✅ สร้างลิงก์สำหรับ ${escapeHtml(d.target.name)} แล้ว (ใช้ได้ครั้งเดียว ถึงวันที่ ${escapeHtml(until)})</p>
+    <div class="invite-actions">
+      <a class="invite-act invite-line" href="https://line.me/R/share?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">ส่งทาง LINE</a>
+      ${navigator.share ? '<button type="button" class="invite-act" data-act="share">แชร์…</button>' : ''}
+      <button type="button" class="invite-act" data-act="copy">คัดลอก</button>
+    </div>`;
+  out.querySelector('[data-act="copy"]').addEventListener('click', async e => {
+    const ok = await copyText(text);
+    e.target.textContent = ok ? 'คัดลอกแล้ว ✓' : 'คัดลอกไม่ได้';
+    setTimeout(() => { e.target.textContent = 'คัดลอก'; }, 2500);
+  });
+  out.querySelector('[data-act="share"]')?.addEventListener('click', () => {
+    navigator.share({ text }).catch(() => { /* ผู้ใช้ปิดหน้าต่างแชร์ */ });
+  });
+}
+
+function bindInvite(body, rec) {
+  const btn = body.querySelector('#inviteBtn'), out = body.querySelector('#inviteResult');
+  if (!btn || btn.disabled) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'กำลังสร้างลิงก์…';
+    out.hidden = true;
+    try {
+      showInviteResult(out, await requestInvite(rec.mt_co));
+      btn.textContent = '🔄 สร้างลิงก์ใหม่ (ลิงก์เดิมจะใช้ไม่ได้)';
+    } catch (e) {
+      out.hidden = false;
+      out.innerHTML = `<p class="invite-error">${escapeHtml(e.message)}</p>`;
+      btn.textContent = '🔗 สร้างลิงก์เข้าระบบ';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 function openDetail(rec) {
   currentRec = rec;
   const id = personId(rec);
@@ -574,6 +721,7 @@ function openDetail(rec) {
     <dl class="detail-grid">
       ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
     </dl>
+    ${inviteSectionHtml(rec)}
     ${familyMembers.length ? `
       <div class="family-section">
         <div class="family-title">สมาชิกในครอบครัวเดียวกัน (${familyMembers.length})</div>
@@ -610,6 +758,7 @@ function openDetail(rec) {
     applyFilters();
     renderNotesList();
   });
+  bindInvite(body, rec);
   body.querySelectorAll('[data-family]').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = allRecords.find(r => personId(r) === btn.dataset.family);

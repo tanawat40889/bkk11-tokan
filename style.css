@@ -793,6 +793,13 @@ dialog#detailModal::backdrop {
 .login-card h1 {
   font-size: 1.3rem;
   margin: 0 0 4px;
+  text-align: center;
+}
+
+.login-logo {
+  align-self: center;
+  width: 72px;
+  height: 72px;
 }
 
 .login-card label {
@@ -998,4 +1005,104 @@ dialog#detailModal::backdrop {
   .bkk-loader__ring { animation-duration: 3.5s; }
   .bkk-loader__icon { animation: none; }
   .bkk-loader { transition-duration: 0.01s; }
+}
+
+/* ---------- Invite link (ลิงก์เข้าระบบ) ---------- */
+
+.login-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.invite-section {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-bottom: 16px;
+}
+
+.invite-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.invite-hint {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.invite-btn {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.invite-btn:disabled {
+  background: var(--chip-bg);
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.invite-result { margin-top: 10px; }
+
+.invite-ok {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--note-fg);
+  background: var(--note-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.invite-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invite-act {
+  flex: 1 1 0;
+  min-width: 96px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.invite-act.invite-line {
+  background: #06c755;
+  border-color: #06c755;
+  color: #fff;
+  font-weight: 600;
 }
