@@ -887,3 +887,115 @@ dialog#detailModal::backdrop {
   .topbar .theme-btn { margin-left: 0; }
   .topbar .logout-btn { margin-left: 0; }
 }
+
+/* ---------- BKK11 loader (same block in Tokan / YMD Maps / Admin) ---------- */
+.bkk-loader {
+  --l-bg: var(--bg, #f4f5f7);
+  --l-fg: var(--text, var(--ink, #1f2430));
+  --l-dim: var(--text-dim, var(--mute, #6b7280));
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background: var(--l-bg);
+  color: var(--l-fg);
+  font-family: inherit;
+  transition: opacity 0.4s ease, visibility 0.4s;
+}
+
+.bkk-loader.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.bkk-loader__mark {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+}
+
+/* วงแหวนหมุน 5 สี (สีเดียวกับไอคอนคนจับมือ) บนรางจาง ๆ */
+.bkk-loader__mark::before,
+.bkk-loader__ring {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.bkk-loader__mark::before {
+  background: var(--l-dim);
+  opacity: 0.16;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+}
+
+.bkk-loader__ring {
+  background: conic-gradient(from 0deg, rgba(0, 0, 0, 0) 0deg, #be1e2d 60deg, #ffc20e 130deg, #8cc152 200deg, #2563eb 270deg, #1f3a6e 340deg, rgba(0, 0, 0, 0) 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  animation: bkk-spin 1.3s linear infinite;
+}
+
+.bkk-loader__icon {
+  width: 84px;
+  height: 84px;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  object-fit: contain;
+  animation: bkk-pulse 1.8s ease-in-out infinite;
+}
+
+.bkk-loader__brand {
+  height: 30px;
+  width: auto;
+}
+
+.bkk-loader__text {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 0.92rem;
+  color: var(--l-dim);
+  text-align: center;
+}
+
+/* โหลดนานผิดปกติ: ลิงก์ลองใหม่โผล่หลัง 20 วินาที (ใช้ CSS ล้วน จึงทำงานแม้สคริปต์พัง) */
+.bkk-loader__retry {
+  margin-top: 4px;
+  padding: 8px 16px;
+  border: 1px solid var(--l-dim);
+  border-radius: 999px;
+  color: var(--l-fg);
+  font-size: 0.85rem;
+  text-decoration: none;
+  opacity: 0;
+  pointer-events: none;
+  animation: bkk-reveal 0.3s ease 20s forwards;
+}
+
+.bkk-loader.alt .bkk-loader__retry {
+  animation-name: bkk-reveal-b;
+}
+
+@keyframes bkk-spin { to { transform: rotate(360deg); } }
+@keyframes bkk-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes bkk-reveal { to { opacity: 1; pointer-events: auto; } }
+@keyframes bkk-reveal-b { to { opacity: 1; pointer-events: auto; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bkk-loader__ring { animation-duration: 3.5s; }
+  .bkk-loader__icon { animation: none; }
+  .bkk-loader { transition-duration: 0.01s; }
+}

@@ -73,6 +73,7 @@ init();
 function showLogin(msg = '') {
   document.getElementById('app').hidden = true;
   document.getElementById('loginView').hidden = false;
+  BKKLoader.hide();
   const err = document.getElementById('loginError');
   err.textContent = msg;
   err.hidden = !msg;
@@ -137,6 +138,7 @@ async function onLogin(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
+  BKKLoader.show('กำลังเข้าสู่ระบบ…');
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
       method: 'POST',
@@ -163,6 +165,7 @@ async function onLogin(e) {
 }
 
 async function start(s, retried = false) {
+  BKKLoader.show('กำลังโหลดข้อมูลสมาชิก…');
   let records;
   try {
     records = await fetchMembers(s.access_token);
@@ -197,6 +200,7 @@ async function start(s, retried = false) {
 
   document.getElementById('loginView').hidden = true;
   document.getElementById('app').hidden = false;
+  BKKLoader.hide();
   renderScopeBadge();
   populateFilterOptions();
   if (!bindEvents.done) { bindEvents(); bindEvents.done = true; }
