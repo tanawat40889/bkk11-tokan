@@ -82,7 +82,7 @@ function showLogin(msg = '') {
 async function init() {
   initTheme();
   document.getElementById('loginForm').addEventListener('submit', onLogin);
-  // สมาชิกใช้รหัสตัวเลข (แป้นตัวเลข) ส่วน staff ใช้รหัสผ่านที่มีตัวอักษร
+  // สมาชิกใช้ Password ตัวเลข (แป้นตัวเลข) ส่วน staff ใช้ Password ที่มีตัวอักษร
   document.getElementById('loginName').addEventListener('input', e => {
     document.getElementById('loginCode').inputMode = /^staff/i.test(e.target.value.trim()) ? 'text' : 'numeric';
   });
@@ -611,7 +611,7 @@ function inviteSectionHtml(rec) {
   return `
     <div class="invite-section">
       <div class="invite-title">ลิงก์เข้าระบบ</div>
-      <p class="invite-hint">${reason ? escapeHtml(reason) : 'สร้างลิงก์ส่งให้คนนี้ กดแล้วเข้าระบบได้ทันที ไม่ต้องพิมพ์ชื่อหรือรหัส'}</p>
+      <p class="invite-hint">${reason ? escapeHtml(reason) : 'สร้างลิงก์ส่งให้คนนี้ กดแล้วเข้าระบบได้ทันที ไม่ต้องพิมพ์ Username หรือ Password'}</p>
       <button type="button" class="invite-btn" id="inviteBtn" ${reason ? 'disabled' : ''}>🔗 สร้างลิงก์เข้าระบบ</button>
       <div class="invite-result" id="inviteResult" hidden></div>
     </div>`;
