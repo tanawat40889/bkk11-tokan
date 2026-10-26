@@ -241,6 +241,7 @@ async function start(s, retried = false) {
   document.getElementById('app').hidden = false;
   BKKLoader.hide();
   renderScopeBadge();
+  showAreasLink(s);
   populateFilterOptions();
   if (!bindEvents.done) { bindEvents(); bindEvents.done = true; }
   applyFilters();
@@ -261,6 +262,19 @@ function renderScopeBadge() {
   const badge = document.getElementById('scopeBadge');
   const where = profile.level === 'all' ? LEVEL_LABEL.all : `${LEVEL_LABEL[profile.level]}${profile[profile.level]}`;
   badge.textContent = `${profile.name} · ${where}`;
+}
+
+// ลิงก์ไปหน้าจัดการพื้นที่: เฉพาะหัวหน้ายุวชนชาย ระดับรวมภาค (ฐานข้อมูลเป็นคนตัดสิน ไม่ใช่ฝั่งนี้)
+async function showAreasLink(s) {
+  if (profile.level !== 'all' || profile.staff) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/is_ymd_rwp_leader`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (res.ok && (await res.json()) === true) document.getElementById('areasLink').hidden = false;
+  } catch { /* ไม่แสดงลิงก์ */ }
 }
 
 function personId(rec) { return String(rec.mt_co); }
