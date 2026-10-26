@@ -234,6 +234,7 @@ async function start(s, retried = false) {
     khet: lvl === 'all' || lvl === 'phak' ? 'all' : [profile.khet],
   };
   allRecords = records;
+  await loadAreaOrder();
   notes = loadNotes();
   watchSessionExpiry(s);
 
@@ -423,24 +424,46 @@ function khetIsLocked() {
   return scope.khet !== 'all' && scope.khet.length === 1;
 }
 
-// ลำดับภาคเวลาเรียงตามพื้นที่: ภาคบางบอนก่อน แล้วค่อยภาคบางขุนเทียน
+// ลำดับพื้นที่มาจากตาราง areas (หน้าจัดการพื้นที่ จัดลำดับได้) ถ้าโหลดไม่ได้ใช้ลำดับสำรองด้านล่าง
+// (ภาคบางบอนก่อน แล้วค่อยภาคบางขุนเทียน; เขต/ตำบล/หมู่ตามตัวอักษรไทย)
 const PHAK_ORDER = ['บางบอน', 'บางขุนเทียน'];
+let areaOrd = null; // Map: 'รวมภาค\u0001ภาค\u0001เขต…' -> sort_order
+
+async function loadAreaOrder() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/areas?select=id,parent_id,name,sort_order&limit=5000`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const key = r => (r.parent_id == null ? [r.name] : [...key(byId.get(r.parent_id)), r.name]);
+    areaOrd = new Map(rows.map(r => [key(r).join('\u0001'), r.sort_order]));
+  } catch { /* ใช้ลำดับสำรอง */ }
+}
+
+// เทียบทีละระดับ: ถ้าทั้งสองฝั่งอยู่ในตาราง areas ใช้ sort_order ไม่เช่นนั้นใช้ลำดับสำรอง
+function compareArea(a, b) {
+  const lv = ['rwp_nt', 'phak_nt', 'sh_nt', 'ch_nt', 'ha_nt'];
+  for (let i = 1; i <= lv.length; i++) {
+    const na = a[lv[i - 1]] || '', nb = b[lv[i - 1]] || '';
+    if (na === nb) continue;
+    const ra = areaOrd?.get(lv.slice(0, i).map(k => a[k] || '').join('\u0001'));
+    const rb = areaOrd?.get(lv.slice(0, i).map(k => b[k] || '').join('\u0001'));
+    if (ra != null && rb != null && ra !== rb) return ra - rb;
+    if (lv[i - 1] === 'phak_nt') {
+      const pa = PHAK_ORDER.indexOf(na), pb = PHAK_ORDER.indexOf(nb);
+      const d = (pa === -1 ? PHAK_ORDER.length : pa) - (pb === -1 ? PHAK_ORDER.length : pb);
+      if (d) return d;
+    }
+    return na.localeCompare(nb, 'th');
+  }
+  return 0;
+}
 
 function sortRecords(records, mode) {
   if (mode === 'area') {
-    return [...records].sort((a, b) => {
-      const rankA = PHAK_ORDER.indexOf(a.phak_nt);
-      const rankB = PHAK_ORDER.indexOf(b.phak_nt);
-      const a2 = rankA === -1 ? PHAK_ORDER.length : rankA;
-      const b2 = rankB === -1 ? PHAK_ORDER.length : rankB;
-      if (a2 !== b2) return a2 - b2;
-      return (
-        (a.sh_nt || '').localeCompare(b.sh_nt || '', 'th') ||
-        (a.ch_nt || '').localeCompare(b.ch_nt || '', 'th') ||
-        (a.ha_nt || '').localeCompare(b.ha_nt || '', 'th') ||
-        fullName(a).localeCompare(fullName(b), 'th')
-      );
-    });
+    return [...records].sort((a, b) => compareArea(a, b) || fullName(a).localeCompare(fullName(b), 'th'));
   }
   return [...records].sort((a, b) => fullName(a).localeCompare(fullName(b), 'th'));
 }
