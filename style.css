@@ -1101,6 +1101,14 @@ dialog#detailModal::backdrop {
   cursor: pointer;
 }
 
+.invite-qr { display: flex; justify-content: center; margin: 14px 0 4px; }
+.invite-qr svg { width: min(240px, 70vw); height: auto; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 8px; }
+.invite-qr-note { margin: 4px 0 10px; text-align: center; font-size: 0.82rem; color: var(--text-dim); }
+.invite-actions + .invite-actions { margin-top: 8px; }
+.invite-manage { margin-top: 14px; }
+.invite-act.invite-danger { color: var(--danger); border-color: var(--danger-border); }
+.invite-act:disabled { opacity: 0.5; cursor: default; }
+
 .invite-act.invite-line {
   background: #06c755;
   border-color: #06c755;

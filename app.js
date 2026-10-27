@@ -642,30 +642,33 @@ function inviteSectionHtml(rec) {
   return `
     <div class="invite-section">
       <div class="invite-title">ลิงก์เข้าระบบ</div>
-      <p class="invite-hint">${reason ? escapeHtml(reason) : 'สร้างลิงก์ส่งให้คนนี้ กดแล้วเข้าระบบได้ทันที ไม่ต้องพิมพ์ Username หรือ Password'}</p>
-      <button type="button" class="invite-btn" id="inviteBtn" ${reason ? 'disabled' : ''}>🔗 สร้างลิงก์เข้าระบบ</button>
+      <p class="invite-hint">${reason ? escapeHtml(reason) : 'ลิงก์ส่วนตัวของคนนี้ ใช้ได้ตลอดไม่หมดอายุ กดแล้วเข้าระบบได้ทันที ส่งทาง LINE หรือให้สแกน QR ก็ได้'}</p>
+      <button type="button" class="invite-btn" id="inviteBtn" ${reason ? 'disabled' : ''}>🔗 ลิงก์เข้าระบบ / QR Code</button>
       <div class="invite-result" id="inviteResult" hidden></div>
     </div>`;
 }
 
-async function requestInvite(mtCo, retried = false) {
+// เรียก Edge Function login ด้วย token ของผู้ใช้ (สร้างลิงก์ / ยกเลิกลิงก์)
+async function callLogin(body, failText, retried = false) {
   const s = loadSession();
   let res;
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/login`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'invite', mt_co: mtCo }),
+      body: JSON.stringify(body),
     });
   } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
   if (res.status === 401 && !retried) {
     const next = await refreshSession(s).catch(() => null);
-    if (next) { saveSession(next); return requestInvite(mtCo, true); }
+    if (next) { saveSession(next); return callLogin(body, failText, true); }
   }
   const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(d.error && d.error !== 'server' ? d.error : 'สร้างลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+  if (!res.ok) throw new Error(d.error && d.error !== 'server' ? d.error : failText);
   return d;
 }
+const requestInvite = (mtCo, renew = false) => callLogin({ action: 'invite', mt_co: mtCo, renew }, 'สร้างลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+const revokeInvite = mtCo => callLogin({ action: 'revoke_link', mt_co: mtCo }, 'ยกเลิกลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง');
 
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }
@@ -679,18 +682,71 @@ async function copyText(text) {
   return ok;
 }
 
-function showInviteResult(out, d) {
+// QR Code เป็น SVG (วาดเองจากตารางของ qrcode.js ด้วย DOM ไม่ใช้ style แทรกในหน้า เพราะ CSP) พื้นขาวตัวดำเสมอไม่ว่าธีมไหน
+function qrSvg(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  const n = q.getModuleCount(), quiet = 4, size = n + quiet * 2, NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'QR Code ลิงก์เข้าระบบ');
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  const bg = document.createElementNS(NS, 'rect');
+  bg.setAttribute('width', size); bg.setAttribute('height', size); bg.setAttribute('fill', '#fff');
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', d); path.setAttribute('fill', '#000');
+  svg.append(bg, path);
+  return svg;
+}
+
+// SVG -> รูป PNG (ส่งต่อทาง LINE หรือบันทึกลงเครื่อง)
+function qrPng(svg, px = 720) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = px;
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, 0, 0, px, px);
+      cv.toBlob(b => (b ? resolve(b) : reject(new Error('png'))), 'image/png');
+    };
+    img.onerror = reject;
+    const xml = new XMLSerializer().serializeToString(svg).replace('<svg ', `<svg width="${px}" height="${px}" `);  // XMLSerializer already adds the xmlns
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+  });
+}
+
+function showInviteResult(out, d, rec) {
   const url = `${location.origin}${location.pathname}?openExternalBrowser=1#i=${d.token}`;
-  const until = new Date(d.expires_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
-  const text = `🔑 ลิงก์เข้าระบบโทกังรวมภาคกรุงเทพ 11\nสำหรับ ${d.target.name}\nกดลิงก์เพื่อเข้าใช้งานได้เลย (ใช้ได้ครั้งเดียว ถึงวันที่ ${until}) กรุณาอย่าส่งต่อให้ผู้อื่น\n${url}`;
+  const text = `🔑 ลิงก์เข้าระบบโทกังรวมภาคกรุงเทพ 11\nสำหรับ ${d.target.name}\nกดลิงก์เพื่อเข้าใช้งานได้เลย (ลิงก์ส่วนตัว ใช้ได้ตลอด) กรุณาอย่าส่งต่อให้ผู้อื่น\n${url}`;
   out.hidden = false;
   out.innerHTML = `
-    <p class="invite-ok">✅ สร้างลิงก์สำหรับ ${escapeHtml(d.target.name)} แล้ว (ใช้ได้ครั้งเดียว ถึงวันที่ ${escapeHtml(until)})</p>
+    <p class="invite-ok">${d.renewed ? '✅ สร้างลิงก์ใหม่' : '✅ ลิงก์'}ของ ${escapeHtml(d.target.name)} (ใช้ได้ตลอด ไม่หมดอายุ)</p>
     <div class="invite-actions">
       <a class="invite-act invite-line" href="https://line.me/R/share?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">ส่งทาง LINE</a>
       ${navigator.share ? '<button type="button" class="invite-act" data-act="share">แชร์…</button>' : ''}
       <button type="button" class="invite-act" data-act="copy">คัดลอก</button>
-    </div>`;
+    </div>
+    <div class="invite-qr" id="inviteQr"></div>
+    <p class="invite-qr-note">ให้เขาสแกนด้วยกล้องมือถือ แล้วกดลิงก์ที่ขึ้นมา</p>
+    <div class="invite-actions">
+      <button type="button" class="invite-act" data-act="qrsave">บันทึกรูป QR</button>
+    </div>
+    <div class="invite-actions invite-manage">
+      <button type="button" class="invite-act" data-act="renew">สร้างลิงก์ใหม่</button>
+      <button type="button" class="invite-act invite-danger" data-act="revoke">ยกเลิกลิงก์</button>
+    </div>
+    <p class="invite-hint">สร้างลิงก์ใหม่ = ลิงก์เดิมใช้ไม่ได้อีก (คนที่เข้าระบบอยู่แล้วยังใช้ต่อได้). ยกเลิกลิงก์ = ลิงก์ใช้ไม่ได้ และคนนี้ถูกออกจากระบบทุกเครื่อง</p>`;
+
+  let svg = null;
+  try { svg = qrSvg(url); out.querySelector('#inviteQr').append(svg); }
+  catch { out.querySelector('#inviteQr').textContent = 'สร้าง QR ไม่สำเร็จ (ลิงก์ยังใช้ได้ตามปกติ)'; }
+
   out.querySelector('[data-act="copy"]').addEventListener('click', async e => {
     const ok = await copyText(text);
     e.target.textContent = ok ? 'คัดลอกแล้ว ✓' : 'คัดลอกไม่ได้';
@@ -699,23 +755,51 @@ function showInviteResult(out, d) {
   out.querySelector('[data-act="share"]')?.addEventListener('click', () => {
     navigator.share({ text }).catch(() => { /* ผู้ใช้ปิดหน้าต่างแชร์ */ });
   });
+  out.querySelector('[data-act="qrsave"]').addEventListener('click', async e => {
+    if (!svg) return;
+    try {
+      const file = new File([await qrPng(svg)], `qr-${d.target.name}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+      else {
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: file.name });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      }
+    } catch (x) {
+      if (x?.name !== 'AbortError') { e.target.textContent = 'บันทึกไม่ได้'; setTimeout(() => { e.target.textContent = 'บันทึกรูป QR'; }, 2500); }
+    }
+  });
+  out.querySelector('[data-act="renew"]').addEventListener('click', async e => {
+    if (!confirm('สร้างลิงก์ใหม่ให้คนนี้?\nลิงก์เดิมจะใช้ไม่ได้อีก (ต้องส่งลิงก์ใหม่ให้เขา)')) return;
+    e.target.disabled = true;
+    try { showInviteResult(out, await requestInvite(rec.mt_co, true), rec); }
+    catch (x) { e.target.disabled = false; alert(x.message); }
+  });
+  out.querySelector('[data-act="revoke"]').addEventListener('click', async e => {
+    if (!confirm(`ยกเลิกลิงก์ของ ${d.target.name}?\nลิงก์เดิมจะใช้ไม่ได้อีก และเขาจะถูกออกจากระบบทุกเครื่อง`)) return;
+    e.target.disabled = true;
+    try {
+      const r = await revokeInvite(rec.mt_co);
+      out.innerHTML = `<p class="invite-ok">✅ ยกเลิกลิงก์ของ ${escapeHtml(r.target.name)} แล้ว (ออกจากระบบ ${Number(r.sessions_ended) || 0} เครื่อง) กดปุ่มด้านบนเพื่อสร้างลิงก์ใหม่ได้เมื่อต้องการ</p>`;
+    } catch (x) { e.target.disabled = false; alert(x.message); }
+  });
 }
 
 function bindInvite(body, rec) {
   const btn = body.querySelector('#inviteBtn'), out = body.querySelector('#inviteResult');
   if (!btn || btn.disabled) return;
+  const label = btn.textContent;
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    btn.textContent = 'กำลังสร้างลิงก์…';
+    btn.textContent = 'กำลังโหลดลิงก์…';
     out.hidden = true;
     try {
-      showInviteResult(out, await requestInvite(rec.mt_co));
-      btn.textContent = '🔄 สร้างลิงก์ใหม่ (ลิงก์เดิมจะใช้ไม่ได้)';
+      showInviteResult(out, await requestInvite(rec.mt_co), rec);
     } catch (e) {
       out.hidden = false;
       out.innerHTML = `<p class="invite-error">${escapeHtml(e.message)}</p>`;
-      btn.textContent = '🔗 สร้างลิงก์เข้าระบบ';
     } finally {
+      btn.textContent = label;
       btn.disabled = false;
     }
   });
