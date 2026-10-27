@@ -425,8 +425,7 @@ function khetIsLocked() {
 }
 
 // ลำดับพื้นที่มาจากตาราง areas (หน้าจัดการพื้นที่ จัดลำดับได้) ถ้าโหลดไม่ได้ใช้ลำดับสำรองด้านล่าง
-// (ภาคบางบอนก่อน แล้วค่อยภาคบางขุนเทียน; เขต/ตำบล/หมู่ตามตัวอักษรไทย)
-const PHAK_ORDER = ['บางบอน', 'บางขุนเทียน'];
+// (ไม่มีชื่อภาคฝังในโค้ด; ถ้าโหลดตารางไม่ได้ เรียงตามตัวอักษรไทย)
 let areaOrd = null; // Map: 'รวมภาค\u0001ภาค\u0001เขต…' -> sort_order
 
 async function loadAreaOrder() {
@@ -451,11 +450,6 @@ function compareArea(a, b) {
     const ra = areaOrd?.get(lv.slice(0, i).map(k => a[k] || '').join('\u0001'));
     const rb = areaOrd?.get(lv.slice(0, i).map(k => b[k] || '').join('\u0001'));
     if (ra != null && rb != null && ra !== rb) return ra - rb;
-    if (lv[i - 1] === 'phak_nt') {
-      const pa = PHAK_ORDER.indexOf(na), pb = PHAK_ORDER.indexOf(nb);
-      const d = (pa === -1 ? PHAK_ORDER.length : pa) - (pb === -1 ? PHAK_ORDER.length : pb);
-      if (d) return d;
-    }
     return na.localeCompare(nb, 'th');
   }
   return 0;
