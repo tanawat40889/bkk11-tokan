@@ -120,3 +120,12 @@
 
 /* the shared grey is 4.4:1 on the page background; this page needs 4.5:1 for its small helper text */
 :root:not([data-theme="dark"]) { --text-dim: #5b6472; }
+
+/* ---------- สิทธิ์เข้าระบบ ---------- */
+.acc { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.acc p { margin: 2px 0; }
+.acc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip-state { font-size: 0.78rem; padding: 2px 10px; border-radius: 999px; background: var(--chip-bg); color: var(--text-dim); }
+.chip-state.ok { background: var(--note-bg); color: var(--note-fg); }
+.chip-state.danger { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+.acc .btn-outline, .acc .btn-danger { margin-top: 10px; }

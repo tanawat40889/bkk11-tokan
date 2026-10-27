@@ -5,7 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-2M7aoJesahgmi0Qe5OE2yirpNg3sQtqrxyQNFRwe4Bs='; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cqdzfsucpivsgznfpjxl.supabase.co; manifest-src 'self'; worker-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
-<title>จัดการพื้นที่ · โทกังรวมภาคกรุงเทพ 11</title>
+<title>แอดมิน · โทกังรวมภาคกรุงเทพ 11</title>
 <script>
   try {
     var t = localStorage.getItem('tokan_theme');
@@ -23,7 +23,7 @@
 <body>
 
 <header class="topbar">
-  <h1>จัดการพื้นที่</h1>
+  <h1>แอดมิน</h1>
   <a class="logout-btn" href="./">&larr; กลับหน้าโทกัง</a>
   <button type="button" class="theme-btn" data-theme-toggle></button>
   <img class="topbar-logo" src="assets/bkk11-logo.png" alt="BKK11 รวมภาคกรุงเทพ" height="32">
@@ -36,6 +36,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="tree" aria-selected="true">โครงสร้าง</button>
       <button type="button" role="tab" data-tab="mismatch" aria-selected="false">ชื่อที่ไม่ตรง <span id="mmCount" class="badge" hidden></span></button>
+      <button type="button" role="tab" data-tab="access" aria-selected="false">สิทธิ์เข้าระบบ</button>
       <button type="button" role="tab" data-tab="log" aria-selected="false">ประวัติ</button>
     </nav>
 
@@ -62,6 +63,15 @@
     <section id="paneMismatch" hidden>
       <p class="hint">ชื่อพื้นที่ในข้อมูลสมาชิกที่ยังไม่มีในโครงสร้าง ถ้าเป็นพื้นที่ใหม่จริง กดเพิ่มได้เลย</p>
       <div id="mmList" class="mm-list"></div>
+    </section>
+
+    <section id="paneAccess" hidden>
+      <p class="hint"><b>ปลดสิทธิ์</b> = ลิงก์ของคนนั้นใช้ไม่ได้ + ออกจากระบบทุกเครื่อง + เข้าระบบไม่ได้ทุกวิธี จนกว่าจะกด <b>คืนสิทธิ์</b> (คืนแล้วต้องออกลิงก์ใหม่ให้เขา). ถ้าแค่เปลี่ยนลิงก์ ไปที่หน้ารายละเอียดสมาชิกในหน้าโทกัง</p>
+      <form id="accessForm" class="toolbar">
+        <input id="accessSearch" type="search" placeholder="ค้นหาชื่อสมาชิก เช่น สมชาย" autocomplete="off" aria-label="ค้นหาชื่อสมาชิก">
+        <button type="submit" class="btn-outline">ค้นหา</button>
+      </form>
+      <div id="accessList"></div>
     </section>
 
     <section id="paneLog" hidden>

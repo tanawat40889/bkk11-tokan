@@ -1,4 +1,4 @@
-// หน้า "จัดการพื้นที่": แก้โครงสร้าง รวมภาค > ภาค > เขต > ตำบล > หมู่ (ตาราง public.areas)
+// หน้า "แอดมิน" (areas.html): แก้โครงสร้าง รวมภาค > ภาค > เขต > ตำบล > หมู่ (ตาราง public.areas)
 // สิทธิ์จริงอยู่ที่ฐานข้อมูล (ฟังก์ชัน area_* ตรวจ is_ymd_rwp_leader()); หน้านี้แค่แสดงผลและเรียกฟังก์ชัน
 const SUPABASE_URL = 'https://cqdzfsucpivsgznfpjxl.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_XkUBjE3M7HUiuDv7YwsbKA_mSu0ToEc';
@@ -342,8 +342,56 @@ function renderMismatch() {
   });
 }
 
+// ---------- สิทธิ์เข้าระบบ ----------
+// รายชื่อคนที่มีลิงก์/ถูกปลดสิทธิ์ (rpc access_list) หรือผลค้นหาสมาชิกจากตาราง tokan (RLS ของรวมภาคเห็นทุกคน)
+async function renderAccess() {
+  const list = $('accessList');
+  list.replaceChildren(el('p', 'dim', 'กำลังโหลด…'));
+  try {
+    const q = $('accessSearch').value.replace(/[,()*%\\]/g, ' ').trim();
+    const state = new Map((await rpc('access_list')).map(r => [r.mt_co, r]));
+    let rows;
+    if (q) {
+      const m = await api(`tokan?select=mt_co,name_t,saku_t,po_nt,fa_nt,sh_nt,ch_nt,ha_nt&or=(name_t.ilike.*${encodeURIComponent(q)}*,saku_t.ilike.*${encodeURIComponent(q)}*)&order=name_t&limit=20`);
+      rows = m.map(x => state.get(x.mt_co) || {
+        mt_co: x.mt_co, name: [x.name_t, x.saku_t].filter(Boolean).join(' '), po: x.po_nt, fa: x.fa_nt,
+        area: [x.sh_nt, x.ch_nt, x.ha_nt].filter(Boolean).join(' › '), link_state: null, blocked: false,
+      });
+    } else rows = [...state.values()];
+    list.replaceChildren();
+    if (!rows.length) return list.append(el('p', 'dim', q ? 'ไม่พบสมาชิกที่ตรงกับคำค้น' : 'ยังไม่มีใครมีลิงก์เข้าระบบ'));
+    if (!q) list.append(el('p', 'dim', `คนที่มีลิงก์เข้าระบบหรือถูกปลดสิทธิ์ ${rows.length} คน`));
+    rows.forEach(r => list.append(accessRow(r)));
+  } catch (e) {
+    list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์จัดการสิทธิ์เข้าระบบ' : e.message));
+  }
+}
+
+function accessRow(r) {
+  const card = el('div', 'acc');
+  const head = el('div', 'acc-head');
+  head.append(el('b', '', r.name || '-'));
+  if (r.blocked) head.append(el('span', 'chip-state danger', 'ถูกปลดสิทธิ์'));
+  else if (r.link_state === 'active') head.append(el('span', 'chip-state ok', 'ลิงก์ใช้งานอยู่'));
+  else if (r.link_state === 'revoked') head.append(el('span', 'chip-state', 'ลิงก์ถูกยกเลิก'));
+  card.append(head, el('p', 'dim', [r.po, r.fa, r.area].filter(Boolean).join(' · ')));
+  if (r.link_at && !r.blocked) card.append(el('p', 'dim', `ออกลิงก์ ${new Date(r.link_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}${r.link_by ? ' โดย ' + r.link_by : ''}`));
+  if (r.blocked && r.blocked_at) card.append(el('p', 'dim', `ปลดสิทธิ์เมื่อ ${new Date(r.blocked_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}`));
+  const b = el('button', r.blocked ? 'btn-outline' : 'btn-danger', r.blocked ? 'คืนสิทธิ์' : 'ปลดสิทธิ์');
+  b.type = 'button';
+  b.addEventListener('click', async () => {
+    const msg = r.blocked ? `คืนสิทธิ์ให้ ${r.name}?\n(เขาต้องมีลิงก์ใหม่จึงจะเข้าระบบได้)` : `ปลดสิทธิ์ ${r.name}?\nลิงก์ใช้ไม่ได้ ออกจากระบบทุกเครื่อง และเข้าไม่ได้ทุกวิธี จนกว่าจะคืนสิทธิ์`;
+    if (!confirm(msg)) return;
+    b.disabled = true;
+    try { await rpc('access_set_block', { p_mt_co: r.mt_co, p_block: !r.blocked }); await renderAccess(); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  });
+  card.append(b);
+  return card;
+}
+
 // ---------- ประวัติ ----------
-const ACTION_TH = { add: 'เพิ่ม', rename: 'เปลี่ยนชื่อ', delete: 'ลบ', alias_add: 'เพิ่มชื่อสำรอง', alias_delete: 'ลบชื่อสำรอง' };
+const ACTION_TH = { add: 'เพิ่ม', rename: 'เปลี่ยนชื่อ', delete: 'ลบ', alias_add: 'เพิ่มชื่อสำรอง', alias_delete: 'ลบชื่อสำรอง', access_block: 'ปลดสิทธิ์', access_unblock: 'คืนสิทธิ์' };
 async function renderLog() {
   const list = $('logList');
   list.replaceChildren(el('p', 'dim', 'กำลังโหลด…'));
@@ -386,6 +434,7 @@ function initUi() {
     try { localStorage.setItem(OPEN_KEY, JSON.stringify([...open])); } catch { /* ignore */ }
     renderTree();
   });
+  $('accessForm').addEventListener('submit', e => { e.preventDefault(); renderAccess(); });
   $('sheetClose').addEventListener('click', () => $('sheet').close());
   // แตะนอกแผงเพื่อปิด
   $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) $('sheet').close(); });
@@ -397,8 +446,10 @@ function initTabs() {
     document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', String(x === t)));
     $('paneTree').hidden = t.dataset.tab !== 'tree';
     $('paneMismatch').hidden = t.dataset.tab !== 'mismatch';
+    $('paneAccess').hidden = t.dataset.tab !== 'access';
     $('paneLog').hidden = t.dataset.tab !== 'log';
     if (t.dataset.tab === 'log') renderLog();
+    if (t.dataset.tab === 'access') renderAccess();
   }));
 }
 
