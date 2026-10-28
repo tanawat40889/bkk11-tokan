@@ -386,6 +386,11 @@ body {
   color: var(--warn);
 }
 
+.badge.badge-sensei {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+
 .badge.badge-note {
   background: var(--note-bg);
   color: var(--note-fg);

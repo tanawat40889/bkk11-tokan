@@ -42,6 +42,15 @@ async function fetchMembers(token) {
   }
 }
 
+// ห้องที่ระลึก อ. ผู้มีพระคุณ: ตาราง sensei_room (RLS ให้เห็นเฉพาะคนที่เห็นในรายชื่ออยู่แล้ว)
+async function fetchSenseiRoom(token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/sensei_room?select=mt_co,entered_on,round_note&limit=5000`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`sensei_room ${res.status}`);
+  return res.json();
+}
+
 const THEME_KEY = 'tokan_theme';
 
 function currentTheme() {
@@ -67,6 +76,17 @@ let allRecords = [];
 let scope = null;   // { phak: 'all'|string[], khet: 'all'|string[] }
 let profile = null; // { name, po, level, phak, khet, tambon, moo }
 let notes = {};     // { [mt_co]: { name, text, updatedAt } }
+let senseiRoom = null; // Map mt_co -> { entered_on, round_note }; null = โหลดไม่ได้ (ซ่อนตัวกรองและเครื่องหมาย)
+
+function senseiText(rec) {
+  const r = senseiRoom?.get(rec.mt_co);
+  if (!senseiRoom) return '';
+  if (!r) return 'ยังไม่เข้า';
+  const d = r.entered_on
+    ? new Date(`${r.entered_on}T00:00:00`).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  return d ? `เข้าแล้ว (${d})` : 'เข้าแล้ว';
+}
 
 init();
 
@@ -234,6 +254,8 @@ async function start(s, retried = false) {
     khet: lvl === 'all' || lvl === 'phak' ? 'all' : [profile.khet],
   };
   allRecords = records;
+  senseiRoom = await fetchSenseiRoom(s.access_token).then(rows => new Map(rows.map(r => [r.mt_co, r]))).catch(() => null);
+  document.getElementById('filterSensei').hidden = !senseiRoom;
   await loadAreaOrder();
   notes = loadNotes();
   watchSessionExpiry(s);
@@ -346,14 +368,14 @@ function bindEvents() {
     updateDependentFilters();
     applyFilters();
   }));
-  ['filterMoo', 'filterFa', 'filterPo']
+  ['filterMoo', 'filterFa', 'filterPo', 'filterSensei']
     .forEach(id => document.getElementById(id).addEventListener('input', applyFilters));
   document.getElementById('filterNoPhoto').addEventListener('change', applyFilters);
   document.getElementById('filterHasNote').addEventListener('change', applyFilters);
   document.getElementById('sortOrder').addEventListener('change', applyFilters);
   document.getElementById('resetFilters').addEventListener('click', () => {
     document.getElementById('searchBox').value = '';
-    ['filterTambon', 'filterMoo', 'filterFa', 'filterPo'].forEach(id => document.getElementById(id).value = '');
+    ['filterTambon', 'filterMoo', 'filterFa', 'filterPo', 'filterSensei'].forEach(id => document.getElementById(id).value = '');
     if (!document.getElementById('filterKhet').disabled) document.getElementById('filterKhet').value = '';
     document.getElementById('filterNoPhoto').checked = false;
     document.getElementById('filterHasNote').checked = false;
@@ -384,6 +406,7 @@ function applyFilters() {
   const moo = document.getElementById('filterMoo').value;
   const fa = document.getElementById('filterFa').value;
   const po = document.getElementById('filterPo').value;
+  const sensei = senseiRoom ? document.getElementById('filterSensei').value : '';
   const noPhotoOnly = document.getElementById('filterNoPhoto').checked;
   const hasNoteOnly = document.getElementById('filterHasNote').checked;
 
@@ -393,6 +416,7 @@ function applyFilters() {
     if (moo && r.ha_nt !== moo) return false;
     if (fa && r.fa_nt !== fa) return false;
     if (po && r.po_nt !== po) return false;
+    if (sensei && (sensei === 'yes') !== senseiRoom.has(r.mt_co)) return false;
     if (noPhotoOnly && r.pager !== 'ขาดรูปถ่าย') return false;
     if (hasNoteOnly && !notes[personId(r)]?.text) return false;
     if (q && !fullName(r).toLowerCase().includes(q)) return false;
@@ -402,7 +426,7 @@ function applyFilters() {
   renderCards(result);
   document.getElementById('resultCount').textContent = `พบ ${result.length} จาก ${allRecords.length} คน`;
 
-  const activeCount = [khet, tambon, moo, fa, po].filter(Boolean).length + (noPhotoOnly ? 1 : 0) + (hasNoteOnly ? 1 : 0);
+  const activeCount = [khet, tambon, moo, fa, po, sensei].filter(Boolean).length + (noPhotoOnly ? 1 : 0) + (hasNoteOnly ? 1 : 0);
   const countEl = document.getElementById('filterCount');
   countEl.textContent = activeCount;
   countEl.hidden = activeCount === 0;
@@ -556,7 +580,7 @@ function buildCard(rec) {
     <div class="friend-info">
       <div class="friend-name">${escapeHtml(fullName(rec))}</div>
       <div class="friend-location">${escapeHtml(locationParts.join(' · '))}</div>
-      ${note?.text ? `<div class="badges"><span class="badge badge-note">มีบันทึก</span></div>` : ''}
+      ${senseiRoom?.has(rec.mt_co) || note?.text ? `<div class="badges">${senseiRoom?.has(rec.mt_co) ? '<span class="badge badge-sensei">เข้าห้องที่ระลึกแล้ว</span>' : ''}${note?.text ? '<span class="badge badge-note">มีบันทึก</span>' : ''}</div>` : ''}
       ${note?.text ? `<div class="card-note-preview">${escapeHtml(truncate(note.text, 80))}</div>` : ''}
     </div>
     <div class="friend-side">
@@ -821,6 +845,7 @@ function openDetail(rec) {
     ['ฝ่าย', rec.fa_nt],
     ['ตำแหน่ง', rec.po_nt],
     ['สถานะโงะฮนซน', rec.go_nt],
+    ['ห้องที่ระลึก อ. ผู้มีพระคุณ', senseiText(rec)],
     ['หมายเหตุระบบ (an_co)', rec.an_co],
     ['รูปถ่าย', rec.pager ? 'ขาดรูปถ่าย' : 'มีรูปถ่าย'],
     ['ชื่อเดิม', rec.name_t_o],
