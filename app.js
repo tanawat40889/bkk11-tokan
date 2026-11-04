@@ -861,7 +861,7 @@ function openDetail(rec) {
     <dl class="detail-grid">
       ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
     </dl>
-    ${inviteSectionHtml(rec)}
+    <button type="button" class="form1050-btn" id="form1050Btn">📄 กรอกแบบติดต่อ 1050</button>
     ${familyMembers.length ? `
       <div class="family-section">
         <div class="family-title">สมาชิกในครอบครัวเดียวกัน (${familyMembers.length})</div>
@@ -883,6 +883,7 @@ function openDetail(rec) {
         <button type="button" class="btn-delete" id="noteDeleteBtn" ${existingNote ? '' : 'disabled'}>ลบบันทึก</button>
       </div>
     </div>
+    ${inviteSectionHtml(rec)}
   `;
 
   body.querySelector('#noteSaveBtn').addEventListener('click', () => {
@@ -899,6 +900,13 @@ function openDetail(rec) {
     renderNotesList();
   });
   bindInvite(body, rec);
+  body.querySelector('#form1050Btn').addEventListener('click', () => openForm1050({
+    id: String(rec.mt_co).padStart(8, '0'),
+    name: fullName(rec),
+    khet: rec.sh_nt || '',
+    tambon: rec.ch_nt || '',
+    moo: rec.ha_nt || '',
+  }));
   body.querySelectorAll('[data-family]').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = allRecords.find(r => personId(r) === btn.dataset.family);
