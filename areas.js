@@ -390,6 +390,85 @@ function accessRow(r) {
   return card;
 }
 
+// ---------- แบบฟอร์ม 1050 ----------
+// สมาชิกส่งจากหน้าโทกัง (ตาราง form_1050) หลังบ้านเปิดดู แก้ไข อนุมัติ/ไม่อนุมัติ ผ่านฟังก์ชัน form1050_admin_* (ตรวจ is_ymd_rwp_leader())
+const FORM_STATUS = { pending: ['รออนุมัติ', 'warn'], approved: ['อนุมัติแล้ว', 'ok'], rejected: ['ไม่อนุมัติ', 'danger'] };
+const fmtDateTime = d => new Date(d).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+
+async function refreshFormBadge() {
+  try {
+    const n = (await rpc('form1050_admin_list', { p_status: 'pending', p_limit: 500 })).length;
+    $('formCount').textContent = n;
+    $('formCount').hidden = !n;
+  } catch { /* ไม่มีสิทธิ์/เน็ตหลุด: ไม่แสดงตัวเลข */ }
+}
+
+async function renderForms() {
+  const list = $('formList');
+  list.replaceChildren(el('p', 'dim', 'กำลังโหลด…'));
+  try {
+    const status = $('formStatus').value || null;
+    const rows = await rpc('form1050_admin_list', { p_status: status, p_limit: 200 });
+    list.replaceChildren();
+    if (!rows.length) list.append(el('p', 'dim', status === 'pending' ? 'ไม่มีแบบฟอร์มที่รออนุมัติ' : 'ไม่มีแบบฟอร์ม'));
+    rows.forEach(r => list.append(formRow(r)));
+    if (status === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
+  } catch (e) {
+    list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์ดูแบบฟอร์ม 1050' : e.message));
+  }
+}
+
+function formRow(r) {
+  const card = el('div', 'frm');
+  const head = el('div', 'acc-head');
+  const [label, kind] = FORM_STATUS[r.status] || [r.status, ''];
+  head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), el('span', `chip-state ${kind}`, label));
+  if (r.edited_by_admin) head.append(el('span', 'chip-state', 'แอดมินแก้ไขแล้ว'));
+  card.append(head, el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
+  if (r.reviewed_at) card.append(el('p', 'dim', `${label}เมื่อ ${fmtDateTime(r.reviewed_at)}${r.reviewer_name ? ' โดย ' + r.reviewer_name : ''}`));
+  if (r.admin_note) card.append(el('p', 'frm-note', `หมายเหตุ: ${r.admin_note}`));
+  const b = el('button', 'btn-outline', 'เปิด / แก้ไข');
+  b.type = 'button';
+  b.addEventListener('click', () => openFormRow(r));
+  card.append(b);
+  return card;
+}
+
+function openFormRow(r) {
+  const save = async (values, status, note) => {
+    await rpc('form1050_admin_save', { p_id: r.id, p_data: values, p_status: status, p_note: note });
+    await renderForms();
+    refreshFormBadge();
+  };
+  const actions = [
+    { label: 'บันทึกการแก้ไข', run: async v => { await save(v, null, null); return 'บันทึกการแก้ไขแล้ว ✅'; } },
+    { label: 'อนุมัติ', kind: 'primary', close: true, run: async v => { await save(v, 'approved', r.admin_note || null); return 'อนุมัติแล้ว ✅'; } },
+    {
+      label: 'ไม่อนุมัติ', kind: 'danger', close: true,
+      run: async v => {
+        const note = prompt('เหตุผลที่ไม่อนุมัติ (ใส่หรือไม่ใส่ก็ได้)', r.admin_note || '');
+        if (note === null) throw new Error('ยกเลิก ยังไม่ได้เปลี่ยนสถานะ');
+        await save(v, 'rejected', note);
+        return 'บันทึกว่าไม่อนุมัติแล้ว';
+      },
+    },
+  ];
+  if (r.status !== 'pending') actions.push({ label: 'ย้ายกลับเป็นรออนุมัติ', run: async v => { await save(v, 'pending', null); return 'ย้ายกลับเป็นรออนุมัติแล้ว'; } });
+  actions.push({
+    label: 'ลบ', kind: 'danger', close: true, confirm: `ลบแบบฟอร์มของ ${r.name_snap || r.mt_co} ถาวร? (กู้คืนไม่ได้)`,
+    run: async () => { await rpc('form1050_admin_delete', { p_id: r.id }); await renderForms(); refreshFormBadge(); return 'ลบแล้ว'; },
+  });
+  const [label] = FORM_STATUS[r.status] || [r.status];
+  openForm1050(null, {
+    title: `แบบ 1050 · ${r.name_snap || r.mt_co}`,
+    meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}`,
+    hint: 'แก้ไขได้ทุกช่อง กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ" เพื่อเก็บการแก้ไขและอนุมัติพร้อมกัน',
+    values: r.data,
+    fileName: `1050-${r.mt_co}`,
+    actions,
+  });
+}
+
 // ---------- ประวัติ ----------
 const ACTION_TH = { add: 'เพิ่ม', rename: 'เปลี่ยนชื่อ', delete: 'ลบ', alias_add: 'เพิ่มชื่อสำรอง', alias_delete: 'ลบชื่อสำรอง', access_block: 'ปลดสิทธิ์', access_unblock: 'คืนสิทธิ์' };
 async function renderLog() {
@@ -435,6 +514,8 @@ function initUi() {
     renderTree();
   });
   $('accessForm').addEventListener('submit', e => { e.preventDefault(); renderAccess(); });
+  $('formStatus').addEventListener('change', renderForms);
+  $('formReload').addEventListener('click', renderForms);
   $('sheetClose').addEventListener('click', () => $('sheet').close());
   // แตะนอกแผงเพื่อปิด
   $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) $('sheet').close(); });
@@ -447,8 +528,10 @@ function initTabs() {
     $('paneTree').hidden = t.dataset.tab !== 'tree';
     $('paneMismatch').hidden = t.dataset.tab !== 'mismatch';
     $('paneAccess').hidden = t.dataset.tab !== 'access';
+    $('paneForms').hidden = t.dataset.tab !== 'forms';
     $('paneLog').hidden = t.dataset.tab !== 'log';
     if (t.dataset.tab === 'log') renderLog();
+    if (t.dataset.tab === 'forms') renderForms();
     if (t.dataset.tab === 'access') renderAccess();
   }));
 }
@@ -477,6 +560,7 @@ async function init() {
   showMsg('');
   $('content').hidden = false;
   renderAll();
+  refreshFormBadge();
 }
 
 init();

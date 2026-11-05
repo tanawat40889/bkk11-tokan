@@ -829,6 +829,24 @@ function bindInvite(body, rec) {
   });
 }
 
+// ส่งแบบติดต่อ 1050 ไปหลังบ้าน: insert ตาราง form_1050 (RLS ตรวจว่าเป็นสมาชิกที่ผู้ส่งมองเห็น และไม่เกิน 30 ฉบับ/ชั่วโมง)
+async function submitForm1050(mtCo, values, retried = false) {
+  const s = loadSession();
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ mt_co: mtCo, data: values }),
+    });
+  } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(s).catch(() => null);
+    if (next) { saveSession(next); return submitForm1050(mtCo, values, true); }
+  }
+  if (!res.ok) throw new Error(res.status === 403 || res.status === 401 ? 'ส่งไม่สำเร็จ: ไม่มีสิทธิ์ หรือส่งบ่อยเกินไป (ไม่เกิน 30 ฉบับต่อชั่วโมง)' : 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง');
+}
+
 function openDetail(rec) {
   currentRec = rec;
   const id = personId(rec);
@@ -906,6 +924,19 @@ function openDetail(rec) {
     khet: rec.sh_nt || '',
     tambon: rec.ch_nt || '',
     moo: rec.ha_nt || '',
+  }, {
+    refill: true,
+    fileName: `1050-${rec.mt_co}`,
+    actions: [{
+      label: 'ส่งไปหลังบ้าน',
+      kind: 'primary',
+      close: true,
+      confirm: 'ส่งแบบฟอร์มนี้ไปหลังบ้านเพื่อตรวจสอบและอนุมัติ?',
+      run: async values => {
+        await submitForm1050(rec.mt_co, values);
+        return 'ส่งแล้ว ✅ รอหลังบ้านตรวจสอบและอนุมัติ';
+      },
+    }],
   }));
   body.querySelectorAll('[data-family]').forEach(btn => {
     btn.addEventListener('click', () => {

@@ -129,3 +129,14 @@
 .chip-state.ok { background: var(--note-bg); color: var(--note-fg); }
 .chip-state.danger { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
 .acc .btn-outline, .acc .btn-danger { margin-top: 10px; }
+
+/* ---------- แบบฟอร์ม 1050 (แท็บในหน้าแอดมิน) ---------- */
+.toolbar select {
+  flex: 1; min-width: 0; font: inherit; font-size: 1rem; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+}
+.frm { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.frm p { margin: 2px 0; }
+.frm .btn-outline { margin-top: 10px; }
+.chip-state.warn { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.frm-note { overflow-wrap: anywhere; }
