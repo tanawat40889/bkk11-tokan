@@ -10,13 +10,17 @@
   const TEXT_PT = 10.5;   // ขนาดตัวอักษรในช่องข้อความ (pt)
   const DIGIT_PT = 11.5;  // ขนาดตัวเลขในกรอบ
   const INK = '#0a2a6e';
+  // ช่อง "ติดรูป" ในฟอร์ม (pt) และขนาดรูปที่ย่อแล้ว (px, สัดส่วนเดียวกับช่อง ~ 40KB ต่อรูป)
+  const PHOTO = { x: 474.5, y: 108.2, w: 80.7, h: 93.7 };
+  const PHOTO_W = 360, PHOTO_H = 418, PHOTO_MAX_BYTES = 70000;
   const DESIGN_W = 920;   // ความกว้างหน้ากระดาษ (px) ที่ตัวอักษรในช่องได้ >= 16px (iOS ไม่ซูมตอนแตะ) ย่อให้พอดีจอด้วย --s
   const COARSE = window.matchMedia('(pointer: coarse)').matches; // จอสัมผัส: ไม่ย่อตัวอักษรตามความยาว (ย่อแล้วต่ำกว่า 16px จะทำให้ iOS ซูม)
   const pctX = v => `${(v / SPEC.w * 100).toFixed(3)}%`;
   const pctY = v => `${(v / SPEC.h * 100).toFixed(3)}%`;
   const sizeCss = pt => `calc(${pt} * var(--pt))`;
 
-  let dlg = null, page = null, fitBox = null, scroller = null, ro = null;
+  let dlg = null, page = null, fitBox = null, scroller = null, ro = null, fileInput = null, photoBox = null;
+  let photo = { blob: null, url: null, existing: false, removed: false }; // existing = รูปที่โหลดมาจากหลังบ้าน
   let current = null;     // { d, opts }
   let busy = false;
 
@@ -77,6 +81,19 @@
       page.append(btn);
     }
 
+    photoBox = document.createElement('div');
+    photoBox.className = 'f1050-photo';
+    Object.assign(photoBox.style, { left: pctX(PHOTO.x), top: pctY(PHOTO.y), width: pctX(PHOTO.w), height: pctY(PHOTO.h) });
+    photoBox.innerHTML = '<img class="f1050-photo-img" alt="รูปถ่าย" hidden><button type="button" class="f1050-photo-pick" aria-label="เพิ่มหรือเปลี่ยนรูปถ่าย"><span>เพิ่มรูป</span></button>';
+    photoBox.querySelector('.f1050-photo-pick').addEventListener('click', () => fileInput.click());
+    page.append(photoBox);
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.hidden = true;
+    fileInput.addEventListener('change', onPickPhoto);
+    dlg.append(fileInput);
+
     page.addEventListener('input', e => {
       const t = e.target;
       if (t.classList.contains('f1050-t')) { fit(t); return; }
@@ -115,6 +132,77 @@
     dlg.addEventListener('close', reset); // ปิดด้วย Esc หรือปุ่มปิด
   }
 
+  // ---------- รูปถ่าย ----------
+  const photoImg = () => photoBox.querySelector('.f1050-photo-img');
+  const hasPhoto = () => !!photo.url;
+
+  function showPhoto(url) {
+    photoImg().src = url;
+    photoImg().hidden = false;
+    photoBox.classList.add('has-photo');
+  }
+
+  // ล้างรูปในหน้าจอ (markRemoved: ผู้ใช้สั่งเอารูปออก -> ถ้ามีรูปเดิมจากหลังบ้าน ต้องลบไฟล์เดิมตอนบันทึก)
+  function resetPhoto(markRemoved) {
+    if (!photoBox) return;
+    const hadServer = photo.existing || photo.removed;
+    if (photo.url) URL.revokeObjectURL(photo.url);
+    photoImg().hidden = true;
+    photoImg().removeAttribute('src');
+    photoBox.classList.remove('has-photo');
+    photo = { blob: null, url: null, existing: false, removed: !!markRemoved && hadServer };
+    updatePhotoButtons();
+  }
+
+  // ย่อรูปในเครื่อง: ตัดกึ่งกลางให้ได้สัดส่วนช่อง แล้วบีบ JPEG จนไม่เกิน ~70KB (ปกติราว 30-50KB)
+  async function compressPhoto(file) {
+    if (!/^image\//.test(file.type)) throw new Error('ไฟล์ที่เลือกไม่ใช่รูปภาพ');
+    const src = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = src;
+      await img.decode().catch(() => { throw new Error('เปิดรูปนี้ไม่ได้ ลองเลือกรูปอื่น (JPG หรือ PNG)'); });
+      const r = PHOTO_W / PHOTO_H;
+      let sw = img.naturalWidth, sh = img.naturalHeight;
+      if (sw / sh > r) sw = sh * r; else sh = sw / r;
+      const cv = document.createElement('canvas');
+      cv.width = PHOTO_W; cv.height = PHOTO_H;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, PHOTO_W, PHOTO_H);
+      ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, PHOTO_W, PHOTO_H);
+      let blob = null;
+      for (const q of [0.82, 0.72, 0.62, 0.5, 0.4]) {
+        blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', q));
+        if (blob && blob.size <= PHOTO_MAX_BYTES) break;
+      }
+      if (!blob) throw new Error('ย่อรูปไม่สำเร็จ');
+      return blob;
+    } finally { URL.revokeObjectURL(src); }
+  }
+
+  async function onPickPhoto() {
+    const f = fileInput.files[0];
+    fileInput.value = '';
+    if (!f) return;
+    setStatus('กำลังย่อรูป…', 'busy');
+    try {
+      const blob = await compressPhoto(f);
+      if (photo.url) URL.revokeObjectURL(photo.url);
+      photo = { blob, url: URL.createObjectURL(blob), existing: photo.existing, removed: false };
+      showPhoto(photo.url);
+      updatePhotoButtons();
+      setStatus(`ใส่รูปแล้ว (ย่อเหลือ ${Math.max(1, Math.round(blob.size / 1024))} KB)`, 'ok');
+    } catch (e) { setStatus(e.message || 'ใส่รูปไม่สำเร็จ', 'err'); }
+  }
+
+  function updatePhotoButtons() {
+    const del = dlg?.querySelector('[data-photo-del]');
+    if (del) del.hidden = !hasPhoto();
+  }
+
+  const photoExtra = () => ({ photoBlob: photo.blob, photoRemoved: photo.removed && !photo.blob });
+
   const rowInputs = t => [...page.querySelectorAll(`.f1050-d[data-row="${t.dataset.row}"]`)];
   const textField = id => page.querySelector(`.f1050-t[data-id="${id}"]`);
 
@@ -132,6 +220,7 @@
     page.querySelectorAll('.f1050-t').forEach(i => { i.value = ''; i.style.fontSize = ''; });
     page.querySelectorAll('.f1050-d').forEach(i => { i.value = ''; });
     page.querySelectorAll('.f1050-c').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    resetPhoto(false);
   }
 
   const thaiToday = () => { const d = new Date(); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`; };
@@ -196,7 +285,7 @@
         box.querySelectorAll('button').forEach(b => { b.disabled = true; });
         setStatus('กำลังดำเนินการ…', 'busy');
         try {
-          const msg = await a.run(collect());
+          const msg = await a.run(collect(), photoExtra());
           setStatus(msg || 'เรียบร้อย', 'ok');
           if (a.close) setTimeout(() => { if (dlg.open) dlg.close(); }, 1100);
           else box.querySelectorAll('button').forEach(b => { b.disabled = false; });
@@ -207,7 +296,13 @@
       });
     }
     if (current.opts.refill && current.d) add('กรอกใหม่จากข้อมูล', '', () => { fillFromMember(current.d); requestAnimationFrame(fitAll); });
-    add('ล้างทั้งหมด', '', clearAll);
+    if (current.opts.photoEditable !== false) {
+      add('📷 เพิ่ม/เปลี่ยนรูป', '', () => fileInput.click());
+      const del = add('ลบรูป', '', () => { resetPhoto(true); setStatus('เอารูปออกแล้ว', 'ok'); });
+      del.dataset.photoDel = '1';
+      del.hidden = !hasPhoto();
+    }
+    add('ล้างทั้งหมด', '', () => { const had = photo.existing || photo.removed; clearAll(); if (had) photo.removed = true; });
     add('บันทึกเป็นรูป', '', savePng);
     add('ปิด', '', () => dlg.close());
   }
@@ -241,6 +336,8 @@
         if (i.value) ctx.fillText(i.value, (b.xs[k] + b.w / 2) * kpt, (b.y + b.h - 3) * kpt);
       });
     }
+    const pi = photoImg();
+    if (hasPhoto() && pi.complete && pi.naturalWidth) ctx.drawImage(pi, PHOTO.x * kpt, PHOTO.y * kpt, PHOTO.w * kpt, PHOTO.h * kpt);
     ctx.lineWidth = 1.7 * kpt;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -266,7 +363,9 @@
 
   // d    = { id (เลขหมายประจำตัว 8 หลัก), name, khet, tambon, moo, date? } ข้อมูลสมาชิกสำหรับกรอกส่วนบนสุด (ไม่บังคับถ้ามี opts.values)
   // opts = { title, meta, hint, values (จาก collect() ถ้ามีจะแสดงค่านี้แทน d), refill (แสดงปุ่มกรอกใหม่จากข้อมูล),
-  //          fileName, actions: [{ label, kind: 'primary'|'danger', run: async values => ข้อความสำเร็จ, close, confirm }] }
+  //          photoUrl (blob: URL ของรูปเดิม ฟอร์มจะ revoke ให้เมื่อปิด), photoEditable (ค่าเริ่มต้น true),
+  //          fileName, actions: [{ label, kind: 'primary'|'danger', run: async (values, { photoBlob, photoRemoved }) => ข้อความสำเร็จ, close, confirm }] }
+  //          photoBlob = รูปใหม่ที่ย่อแล้ว (JPEG ~40KB) หรือ null, photoRemoved = ผู้ใช้เอารูปเดิมออก
   window.openForm1050 = function (d, opts = {}) {
     if (!dlg) build();
     current = { d, opts };
@@ -278,6 +377,8 @@
     setStatus('', '');
     busy = false;
     if (opts.values) apply(opts.values); else fillFromMember(d);
+    if (opts.photoUrl) { photo = { blob: null, url: opts.photoUrl, existing: true, removed: false }; showPhoto(opts.photoUrl); }
+    updatePhotoButtons();
     renderActions();
     if (!dlg.open) dlg.showModal();
     requestAnimationFrame(fitAll);

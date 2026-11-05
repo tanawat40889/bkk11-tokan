@@ -829,22 +829,47 @@ function bindInvite(body, rec) {
   });
 }
 
-// ส่งแบบติดต่อ 1050 ไปหลังบ้าน: insert ตาราง form_1050 (RLS ตรวจว่าเป็นสมาชิกที่ผู้ส่งมองเห็น และไม่เกิน 30 ฉบับ/ชั่วโมง)
-async function submitForm1050(mtCo, values, retried = false) {
+// เรียก Supabase Storage ด้วย token ของผู้ใช้ (401 -> ต่ออายุแล้วลองใหม่หนึ่งครั้ง)
+async function storageCall(path, init, retried = false) {
   const s = loadSession();
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/storage/v1/${path}`, { ...init, headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, ...init.headers } });
+  } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(s).catch(() => null);
+    if (next) { saveSession(next); return storageCall(path, init, true); }
+  }
+  return res;
+}
+
+// ส่งแบบติดต่อ 1050 ไปหลังบ้าน: (ถ้ามีรูป) อัปโหลดรูปที่ย่อแล้วขึ้น bucket form1050-photos ก่อน แล้ว insert ตาราง form_1050
+// RLS ตรวจว่าเป็นสมาชิกที่ผู้ส่งมองเห็น และไม่เกิน 30 ฉบับ/ชั่วโมง; ถ้า insert ไม่ผ่านจะลบรูปที่เพิ่งอัปโหลดทิ้ง
+async function submitForm1050(mtCo, values, photoBlob, retried = false) {
+  const s = loadSession();
+  let photoPath = null;
+  if (photoBlob) {
+    photoPath = `${crypto.randomUUID()}.jpg`;
+    const up = await storageCall(`object/form1050-photos/${photoPath}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: photoBlob });
+    if (!up.ok) throw new Error('ส่งรูปไม่สำเร็จ ลองใหม่อีกครั้ง (หรือลบรูปออกแล้วส่งเฉพาะแบบฟอร์ม)');
+  }
   let res;
   try {
     res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ mt_co: mtCo, data: values }),
+      body: JSON.stringify({ mt_co: mtCo, data: values, photo_path: photoPath }),
     });
-  } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
-  if (res.status === 401 && !retried) {
+  } catch { res = null; }
+  if (res && res.status === 401 && !retried) {
     const next = await refreshSession(s).catch(() => null);
-    if (next) { saveSession(next); return submitForm1050(mtCo, values, true); }
+    if (next) { saveSession(next); if (photoPath) await storageCall(`object/form1050-photos/${photoPath}`, { method: 'DELETE' }).catch(() => {}); return submitForm1050(mtCo, values, photoBlob, true); }
   }
-  if (!res.ok) throw new Error(res.status === 403 || res.status === 401 ? 'ส่งไม่สำเร็จ: ไม่มีสิทธิ์ หรือส่งบ่อยเกินไป (ไม่เกิน 30 ฉบับต่อชั่วโมง)' : 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง');
+  if (!res || !res.ok) {
+    if (photoPath) storageCall(`object/form1050-photos/${photoPath}`, { method: 'DELETE' }).catch(() => {});
+    throw new Error(!res ? 'เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'
+      : res.status === 403 || res.status === 401 ? 'ส่งไม่สำเร็จ: ไม่มีสิทธิ์ หรือส่งบ่อยเกินไป (ไม่เกิน 30 ฉบับต่อชั่วโมง)' : 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง');
+  }
 }
 
 function openDetail(rec) {
@@ -932,8 +957,8 @@ function openDetail(rec) {
       kind: 'primary',
       close: true,
       confirm: 'ส่งแบบฟอร์มนี้ไปหลังบ้านเพื่อตรวจสอบและอนุมัติ?',
-      run: async values => {
-        await submitForm1050(rec.mt_co, values);
+      run: async (values, { photoBlob }) => {
+        await submitForm1050(rec.mt_co, values, photoBlob);
         return 'ส่งแล้ว ✅ รอหลังบ้านตรวจสอบและอนุมัติ';
       },
     }],

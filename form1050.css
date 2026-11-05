@@ -108,3 +108,14 @@ dialog#formModal::backdrop { background: rgba(15, 18, 26, 0.6); }
   font-size: calc(12 * var(--pt));
   line-height: 1;
 }
+
+/* ช่อง "ติดรูป": แตะเพื่อเลือกรูป (ปุ่มเพิ่ม/ลบรูปอยู่แถบด้านบนด้วย เพราะบนมือถือหน้ากระดาษถูกย่อเล็ก) */
+.f1050-photo { position: absolute; overflow: hidden; }
+.f1050-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; background: #fff; pointer-events: none; }
+.f1050-photo-pick {
+  position: absolute; inset: 0; margin: 0; padding: 0 0 calc(5 * var(--pt)); border: 0; background: transparent; cursor: pointer;
+  display: flex; align-items: flex-end; justify-content: center;
+  font-family: 'Prompt', system-ui, sans-serif; font-size: calc(9 * var(--pt)); color: #0a2a6e;
+}
+.f1050-photo-pick:hover { background: rgba(250, 204, 21, 0.18); }
+.f1050-photo.has-photo .f1050-photo-pick span { display: none; }

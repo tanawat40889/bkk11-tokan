@@ -54,6 +54,29 @@ async function api(path, { method = 'GET', body } = {}, retried = false) {
 }
 const rpc = (name, args = {}) => api(`rpc/${name}`, { method: 'POST', body: args });
 
+// Supabase Storage (bucket ส่วนตัว form1050-photos): หลังบ้านอ่าน/ลบได้ตาม policy; 401 -> ต่ออายุแล้วลองใหม่หนึ่งครั้ง
+const PHOTO_BUCKET = 'form1050-photos';
+async function storage(path, init = {}, retried = false) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/${path}`, { ...init, headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}`, ...init.headers } });
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(session).catch(() => null);
+    if (next) { session = next; saveSession(next); return storage(path, init, true); }
+  }
+  return res;
+}
+const photoDelete = path => storage(`object/${PHOTO_BUCKET}/${path}`, { method: 'DELETE' }).catch(() => null); // ลบไม่สำเร็จไม่เป็นไร: ไฟล์ค้างจะขึ้นในปุ่ม "ลบรูปค้าง"
+async function photoLoad(path) {
+  const res = await storage(`object/authenticated/${PHOTO_BUCKET}/${path}`);
+  if (!res.ok) throw new Error('โหลดรูปไม่สำเร็จ');
+  return URL.createObjectURL(await res.blob());
+}
+async function photoUpload(blob) {
+  const path = `${crypto.randomUUID()}.jpg`;
+  const res = await storage(`object/${PHOTO_BUCKET}/${path}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: blob });
+  if (!res.ok) throw new Error('อัปโหลดรูปไม่สำเร็จ');
+  return path;
+}
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -413,9 +436,30 @@ async function renderForms() {
     if (!rows.length) list.append(el('p', 'dim', status === 'pending' ? 'ไม่มีแบบฟอร์มที่รออนุมัติ' : 'ไม่มีแบบฟอร์ม'));
     rows.forEach(r => list.append(formRow(r)));
     if (status === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
+    renderPhotoStats();
   } catch (e) {
     list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์ดูแบบฟอร์ม 1050' : e.message));
   }
+}
+
+// ขนาดรูปที่เก็บอยู่ + ปุ่มลบรูปค้าง (ไฟล์ที่ไม่มีฟอร์มไหนอ้างถึง เกิดจากส่งฟอร์มไม่สำเร็จ)
+async function renderPhotoStats() {
+  const line = $('formPhotoStats'), btn = $('formOrphanBtn');
+  try {
+    const [st] = await rpc('form1050_photo_stats');
+    const mb = st.bytes / 1048576;
+    line.textContent = `รูปที่เก็บไว้ ${st.files} ไฟล์ · ${mb < 0.1 && st.files ? '< 0.1' : mb.toFixed(1)} MB (ฟรี 1,000 MB)`;
+    const orphans = st.orphans || [];
+    btn.hidden = !orphans.length;
+    btn.textContent = `ลบรูปค้างที่ไม่มีฟอร์ม (${orphans.length} ไฟล์)`;
+    btn.onclick = async () => {
+      if (!confirm(`ลบรูปค้าง ${orphans.length} ไฟล์ที่ไม่มีฟอร์มไหนใช้อยู่?`)) return;
+      btn.disabled = true;
+      await Promise.all(orphans.map(photoDelete));
+      btn.disabled = false;
+      renderPhotoStats();
+    };
+  } catch { line.textContent = ''; btn.hidden = true; }
 }
 
 function formRow(r) {
@@ -424,6 +468,7 @@ function formRow(r) {
   const [label, kind] = FORM_STATUS[r.status] || [r.status, ''];
   head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), el('span', `chip-state ${kind}`, label));
   if (r.edited_by_admin) head.append(el('span', 'chip-state', 'แอดมินแก้ไขแล้ว'));
+  if (r.photo_path) head.append(el('span', 'chip-state', 'มีรูป'));
   card.append(head, el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
   if (r.reviewed_at) card.append(el('p', 'dim', `${label}เมื่อ ${fmtDateTime(r.reviewed_at)}${r.reviewer_name ? ' โดย ' + r.reviewer_name : ''}`));
   if (r.admin_note) card.append(el('p', 'frm-note', `หมายเหตุ: ${r.admin_note}`));
@@ -434,36 +479,58 @@ function formRow(r) {
   return card;
 }
 
-function openFormRow(r) {
-  const save = async (values, status, note) => {
-    await rpc('form1050_admin_save', { p_id: r.id, p_data: values, p_status: status, p_note: note });
+async function openFormRow(r) {
+  // รูปเดิม (ถ้ามี) โหลดเป็น blob URL; โหลดไม่ได้ก็เปิดฟอร์มต่อได้ (แจ้งในแถบสถานะของฟอร์มไม่ได้ จึงแจ้งด้วยข้อความด้านล่างตัวเลข)
+  let photoUrl = null, photoNote = '';
+  if (r.photo_path) {
+    try { photoUrl = await photoLoad(r.photo_path); } catch { photoNote = ' · โหลดรูปไม่สำเร็จ'; }
+  }
+  // บันทึกฟอร์ม (+รูปใหม่/ลบรูป) แล้วลบไฟล์รูปเดิมที่ถูกแทนที่ออกจาก Storage
+  const save = async (values, extra, status, note) => {
+    let newPath = null;
+    if (extra.photoBlob) newPath = await photoUpload(extra.photoBlob);
+    let oldPath;
+    try {
+      oldPath = await rpc('form1050_admin_save', {
+        p_id: r.id, p_data: values, p_status: status, p_note: note,
+        p_photo_path: newPath, p_clear_photo: !!extra.photoRemoved,
+      });
+    } catch (e) { if (newPath) photoDelete(newPath); throw e; }
+    if (oldPath) photoDelete(oldPath);
     await renderForms();
     refreshFormBadge();
   };
   const actions = [
-    { label: 'บันทึกการแก้ไข', run: async v => { await save(v, null, null); return 'บันทึกการแก้ไขแล้ว ✅'; } },
-    { label: 'อนุมัติ', kind: 'primary', close: true, run: async v => { await save(v, 'approved', r.admin_note || null); return 'อนุมัติแล้ว ✅'; } },
+    { label: 'บันทึกการแก้ไข', run: async (v, x) => { await save(v, x, null, null); return 'บันทึกการแก้ไขแล้ว ✅'; } },
+    { label: 'อนุมัติ', kind: 'primary', close: true, run: async (v, x) => { await save(v, x, 'approved', r.admin_note || null); return 'อนุมัติแล้ว ✅'; } },
     {
       label: 'ไม่อนุมัติ', kind: 'danger', close: true,
-      run: async v => {
+      run: async (v, x) => {
         const note = prompt('เหตุผลที่ไม่อนุมัติ (ใส่หรือไม่ใส่ก็ได้)', r.admin_note || '');
         if (note === null) throw new Error('ยกเลิก ยังไม่ได้เปลี่ยนสถานะ');
-        await save(v, 'rejected', note);
+        await save(v, x, 'rejected', note);
         return 'บันทึกว่าไม่อนุมัติแล้ว';
       },
     },
   ];
-  if (r.status !== 'pending') actions.push({ label: 'ย้ายกลับเป็นรออนุมัติ', run: async v => { await save(v, 'pending', null); return 'ย้ายกลับเป็นรออนุมัติแล้ว'; } });
+  if (r.status !== 'pending') actions.push({ label: 'ย้ายกลับเป็นรออนุมัติ', run: async (v, x) => { await save(v, x, 'pending', null); return 'ย้ายกลับเป็นรออนุมัติแล้ว'; } });
   actions.push({
-    label: 'ลบ', kind: 'danger', close: true, confirm: `ลบแบบฟอร์มของ ${r.name_snap || r.mt_co} ถาวร? (กู้คืนไม่ได้)`,
-    run: async () => { await rpc('form1050_admin_delete', { p_id: r.id }); await renderForms(); refreshFormBadge(); return 'ลบแล้ว'; },
+    label: 'ลบ', kind: 'danger', close: true, confirm: `ลบแบบฟอร์มของ ${r.name_snap || r.mt_co} ถาวร? (รวมรูป กู้คืนไม่ได้)`,
+    run: async () => {
+      const oldPath = await rpc('form1050_admin_delete', { p_id: r.id });
+      if (oldPath) photoDelete(oldPath);
+      await renderForms();
+      refreshFormBadge();
+      return 'ลบแล้ว';
+    },
   });
   const [label] = FORM_STATUS[r.status] || [r.status];
   openForm1050(null, {
     title: `แบบ 1050 · ${r.name_snap || r.mt_co}`,
-    meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}`,
-    hint: 'แก้ไขได้ทุกช่อง กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ" เพื่อเก็บการแก้ไขและอนุมัติพร้อมกัน',
+    meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}${photoNote}`,
+    hint: 'แก้ไขได้ทุกช่อง รวมถึงเพิ่ม/เปลี่ยน/ลบรูป กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ" เพื่อเก็บการแก้ไขและอนุมัติพร้อมกัน',
     values: r.data,
+    photoUrl,
     fileName: `1050-${r.mt_co}`,
     actions,
   });
