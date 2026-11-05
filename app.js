@@ -872,6 +872,38 @@ async function submitForm1050(mtCo, values, photoBlob, retried = false) {
   }
 }
 
+// แบบ 1050 ที่ "ฉัน" ส่งเกี่ยวกับคนนี้ พร้อมขั้นตอนปัจจุบัน (RLS: ผู้ส่งเห็นเฉพาะที่ตัวเองส่ง, แอดมินเห็นทั้งหมด)
+async function loadForm1050History(rec, box) {
+  try {
+    const s = loadSession();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050?select=id,status,submitted_at,reviewed_at,emailed_at,admin_note&mt_co=eq.${Number(rec.mt_co)}&order=submitted_at.desc&limit=5`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    if (!rows.length || currentRec !== rec || !box.isConnected) return;
+    box.replaceChildren();
+    const title = document.createElement('p');
+    title.className = 'f1050-history-title';
+    title.textContent = 'แบบ 1050 ที่ส่งไว้';
+    box.append(title);
+    for (const f of rows) {
+      const item = document.createElement('div');
+      item.className = 'f1050-history-item';
+      const when = document.createElement('p');
+      when.textContent = `ส่งเมื่อ ${new Date(f.submitted_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}`;
+      item.append(form1050Chip(f), form1050Steps(f), when);
+      if (f.status === 'rejected' && f.admin_note) {
+        const note = document.createElement('p');
+        note.textContent = `เหตุผล: ${f.admin_note}`;
+        item.append(note);
+      }
+      box.append(item);
+    }
+    box.hidden = false;
+  } catch { /* ไม่แสดงประวัติ */ }
+}
+
 function openDetail(rec) {
   currentRec = rec;
   const id = personId(rec);
@@ -905,6 +937,7 @@ function openDetail(rec) {
       ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
     </dl>
     <button type="button" class="form1050-btn" id="form1050Btn">📄 กรอกแบบติดต่อ 1050</button>
+    <div class="f1050-history" id="form1050History" hidden></div>
     ${familyMembers.length ? `
       <div class="family-section">
         <div class="family-title">สมาชิกในครอบครัวเดียวกัน (${familyMembers.length})</div>
@@ -943,6 +976,7 @@ function openDetail(rec) {
     renderNotesList();
   });
   bindInvite(body, rec);
+  loadForm1050History(rec, body.querySelector('#form1050History'));
   body.querySelector('#form1050Btn').addEventListener('click', () => openForm1050({
     id: String(rec.mt_co).padStart(8, '0'),
     name: fullName(rec),
@@ -959,6 +993,8 @@ function openDetail(rec) {
       confirm: 'ส่งแบบฟอร์มนี้ไปหลังบ้านเพื่อตรวจสอบและอนุมัติ?',
       run: async (values, { photoBlob }) => {
         await submitForm1050(rec.mt_co, values, photoBlob);
+        const hist = document.getElementById('form1050History');
+        if (hist) loadForm1050History(rec, hist);
         return 'ส่งแล้ว ✅ รอหลังบ้านตรวจสอบและอนุมัติ';
       },
     }],

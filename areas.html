@@ -46,8 +46,9 @@
       <p class="hint">แบบติดต่อ 1050 ที่สมาชิกกดส่งมาจากหน้าโทกัง กด <b>เปิด / แก้ไข</b> เพื่อดู แก้ทุกช่องได้ แล้วกด <b>อนุมัติ</b> หรือ <b>ไม่อนุมัติ</b></p>
       <div class="toolbar">
         <select id="formStatus" aria-label="กรองตามสถานะ">
-          <option value="pending">รออนุมัติ</option>
-          <option value="approved">อนุมัติแล้ว</option>
+          <option value="pending">รอตรวจสอบ</option>
+          <option value="approved_unsent">อนุมัติแล้ว · รอส่งอีเมล</option>
+          <option value="sent">ส่งอีเมลแล้ว</option>
           <option value="rejected">ไม่อนุมัติ</option>
           <option value="">ทั้งหมด</option>
         </select>
@@ -57,7 +58,9 @@
         <label class="bulk-all"><input type="checkbox" id="formSelAll"> เลือกทั้งหมด</label>
         <span id="formSelCount" class="dim"></span>
         <button type="button" id="formBulkBtn" class="btn-solid" disabled>อนุมัติ + ส่งอีเมลที่เลือก (ฉบับเดียว)</button>
+        <p class="hint bulk-limit">ส่งอีเมลรวมได้ครั้งละ <b>ไม่เกิน 10 ฉบับ</b> (ไฟล์แนบรวมจะได้ไม่ใหญ่เกินที่อีเมลรับได้) ถ้ามีมากกว่านี้ ให้ส่งทีละชุด</p>
       </div>
+      <p id="formBulkWarn" class="hint" hidden></p>
       <p id="formBulkMsg" class="status" role="status" hidden></p>
       <p id="formPhotoStats" class="dim"></p>
       <button type="button" id="formOrphanBtn" class="btn-outline" hidden></button>

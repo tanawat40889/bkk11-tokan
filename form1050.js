@@ -520,6 +520,34 @@
   window.renderForm1050Png = renderValuesPng;
   const renderPng = () => renderValuesPng(collect(), photo.url);
 
+  // ---------- สถานะ/ขั้นตอนของแบบฟอร์มที่ส่งไปหลังบ้าน (ใช้ทั้งหน้าโทกังและหน้าแอดมิน) ----------
+  // คำนวณจากคอลัมน์ที่มีอยู่: status (pending/approved/rejected) + emailed_at; ไม่มีคอลัมน์สถานะเพิ่ม
+  // step = ขั้นปัจจุบัน (1 ส่งแบบฟอร์ม, 2 ตรวจสอบ/อนุมัติ, 3 ส่งอีเมลถึงสมาคม, 4 = เสร็จครบ)
+  const STEP_LABELS = ['ส่งแบบฟอร์ม', 'ตรวจสอบ/อนุมัติ', 'ส่งอีเมลถึงสมาคม'];
+  window.form1050State = f => {
+    if (f.status === 'rejected') return { label: 'ไม่อนุมัติ', kind: 'danger', step: 2, rejected: true };
+    if (f.status === 'approved') return f.emailed_at ? { label: 'ส่งอีเมลแล้ว', kind: 'ok', step: 4 } : { label: 'อนุมัติแล้ว · รอส่งอีเมล', kind: 'info', step: 3 };
+    return { label: 'รอตรวจสอบ', kind: 'warn', step: 2 };
+  };
+  window.form1050Chip = f => {
+    const st = window.form1050State(f), c = document.createElement('span');
+    c.className = `f1050-chip ${st.kind}`;
+    c.textContent = st.label;
+    return c;
+  };
+  window.form1050Steps = f => {
+    const st = window.form1050State(f), ol = document.createElement('ol');
+    ol.className = 'f1050-steps';
+    ol.setAttribute('aria-label', `สถานะ: ${st.label}`);
+    STEP_LABELS.forEach((t, i) => {
+      const n = i + 1, li = document.createElement('li');
+      li.textContent = n === 2 && st.rejected ? 'ไม่อนุมัติ' : t;
+      li.className = st.rejected ? (n === 1 ? 'done' : n === 2 ? 'bad' : 'skip') : n < st.step ? 'done' : n === st.step ? 'cur' : '';
+      ol.append(li);
+    });
+    return ol;
+  };
+
   // d    = { id (เลขหมายประจำตัว 8 หลัก), name, khet, tambon, moo, date? } ข้อมูลสมาชิกสำหรับกรอกส่วนบนสุด (ไม่บังคับถ้ามี opts.values)
   // opts = { title, meta, hint, values (จาก collect() ถ้ามีจะแสดงค่านี้แทน d), refill (แสดงปุ่มกรอกใหม่จากข้อมูล),
   //          photoUrl (blob: URL ของรูปเดิม ฟอร์มจะ revoke ให้เมื่อปิด), photoEditable (ค่าเริ่มต้น true),

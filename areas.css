@@ -167,3 +167,5 @@
 .bulk .dim { flex: 1; min-width: 160px; margin: 0; }
 .frm-pick { display: inline-flex; align-items: center; padding: 10px 10px 10px 0; margin: -10px 0; cursor: pointer; }
 #formBulkMsg { margin: 0 0 12px; border-radius: 8px; }
+
+.bulk-limit { flex-basis: 100%; margin: 0; }

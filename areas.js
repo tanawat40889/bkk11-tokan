@@ -415,10 +415,12 @@ function accessRow(r) {
 
 // ---------- แบบฟอร์ม 1050 ----------
 // สมาชิกส่งจากหน้าโทกัง (ตาราง form_1050) หลังบ้านเปิดดู แก้ไข อนุมัติ/ไม่อนุมัติ ผ่านฟังก์ชัน form1050_admin_* (ตรวจ is_ymd_rwp_leader())
-const FORM_STATUS = { pending: ['รออนุมัติ', 'warn'], approved: ['อนุมัติแล้ว', 'ok'], rejected: ['ไม่อนุมัติ', 'danger'] };
+const MAX_BATCH = 10; // ส่งอีเมลรวมได้ครั้งละไม่เกินนี้ (ไฟล์แนบรวมต้องไม่ใหญ่เกินที่อีเมลรับได้)
 let formRows = [];           // แถวล่าสุดที่แสดงในแท็บแบบฟอร์ม
 const formSel = new Set();   // id ของฟอร์มที่ติ๊กเลือกไว้ (ส่งอีเมลรวมครั้งเดียว)
 const selectable = r => r.status !== 'rejected'; // ไม่อนุมัติไปแล้ว ต้องย้ายกลับเป็นรออนุมัติก่อนจึงเลือกได้
+const bulkWarn = t => { $('formBulkWarn').hidden = !t; $('formBulkWarn').textContent = t || ''; };
+const syncChecks = () => document.querySelectorAll('.frm-pick input').forEach(c => { c.checked = formSel.has(Number(c.dataset.id)); });
 const fmtDateTime = d => new Date(d).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 
 async function refreshFormBadge() {
@@ -433,15 +435,18 @@ async function renderForms() {
   const list = $('formList');
   list.replaceChildren(el('p', 'dim', 'กำลังโหลด…'));
   try {
-    const status = $('formStatus').value || null;
-    const rows = await rpc('form1050_admin_list', { p_status: status, p_limit: 200 });
+    const f = $('formStatus').value;   // '', pending, approved_unsent, sent, rejected (สถานะแบบ 3 ขั้นตอน คำนวณจาก status + emailed_at)
+    const status = { pending: 'pending', approved_unsent: 'approved', sent: 'approved', rejected: 'rejected' }[f] || null;
+    let rows = await rpc('form1050_admin_list', { p_status: status, p_limit: 200 });
+    if (f === 'approved_unsent') rows = rows.filter(r => !r.emailed_at);
+    if (f === 'sent') rows = rows.filter(r => r.emailed_at);
     list.replaceChildren();
-    if (!rows.length) list.append(el('p', 'dim', status === 'pending' ? 'ไม่มีแบบฟอร์มที่รออนุมัติ' : 'ไม่มีแบบฟอร์ม'));
+    if (!rows.length) list.append(el('p', 'dim', f === 'pending' ? 'ไม่มีแบบฟอร์มที่รอตรวจสอบ' : 'ไม่มีแบบฟอร์มในสถานะนี้'));
     formRows = rows;
     for (const id of [...formSel]) if (!rows.some(r => r.id === id && selectable(r))) formSel.delete(id);
     rows.forEach(r => list.append(formRow(r)));
     updateBulk();
-    if (status === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
+    if (f === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
     renderPhotoStats();
   } catch (e) {
     list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์ดูแบบฟอร์ม 1050' : e.message));
@@ -471,22 +476,28 @@ async function renderPhotoStats() {
 function formRow(r) {
   const card = el('div', 'frm');
   const head = el('div', 'acc-head');
-  const [label, kind] = FORM_STATUS[r.status] || [r.status, ''];
+  const label = form1050State(r).label;
   if (selectable(r)) {
     const pick = el('label', 'frm-pick');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = formSel.has(r.id);
     cb.setAttribute('aria-label', `เลือก ${r.name_snap || r.mt_co}`);
-    cb.addEventListener('change', () => { if (cb.checked) formSel.add(r.id); else formSel.delete(r.id); updateBulk(); });
+    cb.dataset.id = r.id;
+    cb.addEventListener('change', () => {
+      if (cb.checked && formSel.size >= MAX_BATCH) { cb.checked = false; bulkWarn(`เลือกได้ไม่เกิน ${MAX_BATCH} ฉบับต่อเมล`); return; }
+      if (cb.checked) formSel.add(r.id); else formSel.delete(r.id);
+      bulkWarn('');
+      updateBulk();
+    });
     pick.append(cb);
     head.append(pick);
   }
-  head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), el('span', `chip-state ${kind}`, label));
+  head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), form1050Chip(r));
   if (r.edited_by_admin) head.append(el('span', 'chip-state', 'แอดมินแก้ไขแล้ว'));
   if (r.photo_path) head.append(el('span', 'chip-state', 'มีรูป'));
-  card.append(head, el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
-  if (r.reviewed_at) card.append(el('p', 'dim', `${label}เมื่อ ${fmtDateTime(r.reviewed_at)}${r.reviewer_name ? ' โดย ' + r.reviewer_name : ''}`));
+  card.append(head, form1050Steps(r), el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
+  if (r.reviewed_at) card.append(el('p', 'dim', `${r.status === 'rejected' ? 'ไม่อนุมัติ' : 'อนุมัติ'}เมื่อ ${fmtDateTime(r.reviewed_at)}${r.reviewer_name ? ' โดย ' + r.reviewer_name : ''}`));
   if (r.emailed_at) card.append(el('p', 'dim', `ส่งอีเมลแล้วเมื่อ ${fmtDateTime(r.emailed_at)} ถึง ${r.emailed_to}`));
   if (r.admin_note) card.append(el('p', 'frm-note', `หมายเหตุ: ${r.admin_note}`));
   const b = el('button', 'btn-outline', 'เปิด / แก้ไข');
@@ -520,7 +531,7 @@ const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(
 function updateBulk() {
   const pick = formRows.filter(selectable), sel = pick.filter(r => formSel.has(r.id));
   $('formBulk').hidden = !pick.length;
-  $('formSelAll').checked = !!pick.length && sel.length === pick.length;
+  $('formSelAll').checked = !!sel.length && sel.length === Math.min(pick.length, MAX_BATCH);
   const p = sel.filter(r => r.status !== 'approved').length;
   $('formSelCount').textContent = sel.length ? `เลือก ${sel.length} ฉบับ (รออนุมัติ ${p} · อนุมัติแล้ว ${sel.length - p})` : 'ติ๊กเลือกฟอร์มที่จะส่งอีเมลพร้อมกัน';
   $('formBulkBtn').disabled = !sel.length;
@@ -530,6 +541,7 @@ function updateBulk() {
 async function bulkSend() {
   const sel = formRows.filter(r => selectable(r) && formSel.has(r.id));
   if (!sel.length) return;
+  if (sel.length > MAX_BATCH) { bulkWarn(`เลือกได้ไม่เกิน ${MAX_BATCH} ฉบับต่อเมล (ตอนนี้เลือก ${sel.length})`); return; }
   const pending = sel.filter(r => r.status !== 'approved'), photos = sel.filter(r => r.photo_path).length;
   if (!confirm(`${pending.length ? `อนุมัติ ${pending.length} ฉบับ และ` : ''}ส่งอีเมลเดียวรวม ${sel.length} ฉบับ\n(แนบรูปฟอร์ม ${sel.length} ไฟล์${photos ? ` + รูปถ่าย ${photos} ไฟล์` : ''})`)) return;
   const btn = $('formBulkBtn'), msg = $('formBulkMsg');
@@ -630,7 +642,7 @@ async function openFormRow(r) {
       return 'ลบแล้ว';
     },
   });
-  const [label] = FORM_STATUS[r.status] || [r.status];
+  const label = form1050State(r).label;
   openForm1050(null, {
     title: `แบบ 1050 · ${r.name_snap || r.mt_co}`,
     meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}${photoNote}`,
@@ -689,8 +701,11 @@ function initUi() {
   $('accessForm').addEventListener('submit', e => { e.preventDefault(); renderAccess(); });
   $('formStatus').addEventListener('change', () => { formSel.clear(); renderForms(); });
   $('formSelAll').addEventListener('change', e => {
-    formRows.filter(selectable).forEach(r => (e.target.checked ? formSel.add(r.id) : formSel.delete(r.id)));
-    document.querySelectorAll('.frm-pick input').forEach(c => { c.checked = e.target.checked; });
+    const rows = formRows.filter(selectable);
+    formSel.clear();
+    if (e.target.checked) rows.slice(0, MAX_BATCH).forEach(r => formSel.add(r.id));
+    bulkWarn(e.target.checked && rows.length > MAX_BATCH ? `เลือกได้ไม่เกิน ${MAX_BATCH} ฉบับต่อเมล จึงเลือก ${MAX_BATCH} ฉบับแรกจากทั้งหมด ${rows.length} ฉบับ ส่งชุดนี้เสร็จแล้วค่อยเลือกชุดถัดไป` : '');
+    syncChecks();
     updateBulk();
   });
   $('formBulkBtn').addEventListener('click', bulkSend);
