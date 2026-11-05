@@ -1,22 +1,30 @@
 "use strict";
 
-// แบบติดต่องานทะเบียน 1050: ภาพฟอร์ม (assets/form1050.png) + ช่องกรอกวางทับตำแหน่งจุดไข่ปลา/กรอบตัวเลข/วงกลม
+// แบบฟอร์ม 1050 / 1020 / 2020: ภาพฟอร์ม (assets/form<ชนิด>.png) + ช่องกรอกวางทับตำแหน่งจุดไข่ปลา/กรอบตัวเลข/วงกลม
 // ใช้ร่วมกันทั้งหน้าโทกัง (สมาชิกกรอกแล้วส่งไปหลังบ้าน) และหน้าแอดมิน (ตรวจ แก้ไข อนุมัติ) รูปแบบ CSS อยู่ที่ form1050.css
 // ไฟล์นี้ไม่ยุ่งกับฐานข้อมูล: หน้าที่เรียกส่งปุ่ม (actions) มาเอง ข้อมูลในหน้าต่างล้างทุกครั้งที่ปิด
 // ตำแหน่งทั้งหมดเป็นหน่วย pt ของ PDF ต้นฉบับ (กว้าง 595.32 สูง 841.92) ถ้าเปลี่ยนฟอร์ม 1050 เวอร์ชันใหม่ ต้องวัดตำแหน่งใหม่
 (() => {
-  const SPEC = {"w":595.32,"h":841.92,"fields":[{"id":"name","x":121.2,"y":56.2,"w":149.7,"h":18.1},{"id":"khet","x":291.8,"y":56.2,"w":92.1,"h":18.1},{"id":"tambon","x":410.1,"y":56.2,"w":66.2,"h":18.1},{"id":"moo","x":490.5,"y":56.2,"w":69.1,"h":18.1},{"id":"subject","x":412.0,"y":85.1,"w":150.5,"h":15.4},{"id":"date","x":112.6,"y":88.9,"w":52.1,"h":10.9},{"id":"f6","x":276.4,"y":144.1,"w":179.9,"h":15.4},{"id":"f7","x":298.7,"y":206.7,"w":114.0,"h":15.4},{"id":"f8","x":222.6,"y":233.8,"w":24.8,"h":15.4},{"id":"f9","x":251.3,"y":233.8,"w":31.7,"h":15.4},{"id":"f10","x":316.3,"y":233.8,"w":18.0,"h":15.4},{"id":"f11","x":378.8,"y":233.8,"w":76.5,"h":15.4},{"id":"f12","x":121.7,"y":234.3,"w":59.2,"h":15.4},{"id":"f13","x":98.3,"y":306.7,"w":69.6,"h":15.4},{"id":"f14","x":260.0,"y":306.7,"w":78.5,"h":15.4},{"id":"f15","x":398.7,"y":306.7,"w":38.3,"h":15.4},{"id":"f16","x":452.5,"y":306.7,"w":57.0,"h":15.4},{"id":"f17","x":80.1,"y":325.6,"w":89.8,"h":15.4},{"id":"f18","x":248.8,"y":325.6,"w":85.2,"h":15.4},{"id":"f19","x":428.4,"y":325.6,"w":80.6,"h":15.4},{"id":"f20","x":79.5,"y":344.6,"w":89.8,"h":15.4},{"id":"f21","x":265.4,"y":344.6,"w":71.8,"h":15.4},{"id":"f22","x":429.2,"y":344.6,"w":80.6,"h":15.4},{"id":"f23","x":87.9,"y":363.6,"w":78.5,"h":15.4},{"id":"f24","x":269.9,"y":363.6,"w":67.2,"h":15.4},{"id":"f25","x":419.2,"y":363.6,"w":87.4,"h":15.4},{"id":"f26","x":302.8,"y":387.4,"w":34.1,"h":15.4},{"id":"f27","x":429.3,"y":387.4,"w":27.4,"h":15.4},{"id":"f28","x":460.5,"y":387.4,"w":27.4,"h":15.4},{"id":"f29","x":514.1,"y":387.4,"w":41.0,"h":15.4},{"id":"f30","x":267.8,"y":428.1,"w":68.4,"h":15.4},{"id":"f31","x":357.5,"y":428.1,"w":77.5,"h":15.4},{"id":"f32","x":449.7,"y":428.1,"w":66.1,"h":15.4},{"id":"f33","x":190.2,"y":475.2,"w":121.4,"h":15.4},{"id":"f34","x":188.2,"y":493.4,"w":123.8,"h":15.4},{"id":"f35","x":349.4,"y":519.0,"w":40.8,"h":13.1},{"id":"f36","x":425.8,"y":519.0,"w":48.3,"h":13.1},{"id":"f37","x":535.3,"y":540.5,"w":21.6,"h":15.4},{"id":"f38","x":389.2,"y":582.7,"w":43.3,"h":15.4},{"id":"f39","x":453.9,"y":582.7,"w":36.5,"h":15.4},{"id":"f40","x":502.1,"y":582.7,"w":38.8,"h":15.4},{"id":"f41","x":360.4,"y":643.3,"w":20.3,"h":15.4},{"id":"f42","x":390.5,"y":643.3,"w":18.0,"h":15.4},{"id":"f43","x":447.8,"y":643.3,"w":22.6,"h":15.4},{"id":"f44","x":416.7,"y":690.5,"w":131.7,"h":15.4},{"id":"f45","x":147.7,"y":737.0,"w":168.7,"h":14.2},{"id":"f46","x":441.0,"y":770.3,"w":97.9,"h":15.4},{"id":"f47","x":425.1,"y":791.0,"w":25.1,"h":15.4},{"id":"f48","x":454.0,"y":791.0,"w":29.6,"h":15.4},{"id":"f49","x":516.9,"y":791.0,"w":25.0,"h":15.4}],"boxes":[{"id":"idtop","y":33.3,"h":15.3,"w":13.7,"xs":[429.3,443.0,456.7,470.4,491.4,505.1,518.8,532.4]},{"id":"id2","y":210.6,"h":14.8,"w":13.7,"xs":[434.2,447.8,461.5,475.1,496.1,509.8,523.4,537.0]},{"id":"id4a","y":475.8,"h":14.0,"w":13.7,"xs":[430.9,444.6,458.2,471.9,491.4,505.1,518.7,532.3]},{"id":"id4b","y":494.0,"h":14.1,"w":13.7,"xs":[430.9,444.6,458.2,471.9,491.4,505.1,518.7,532.3]},{"id":"id6a","y":731.7,"h":18.7,"w":13.7,"xs":[416.1,429.7,443.4,457.0,478.0,491.7,505.3,518.9]},{"id":"id6b","y":768.9,"h":18.7,"w":13.7,"xs":[154.2,167.9,181.5,195.2,216.2,229.8,243.5,257.1]}],"circles":[{"id":"c0","x":34.0,"y":114.3,"s":12.2},{"id":"c1","x":34.0,"y":179.0,"s":12.2},{"id":"c2","x":73.0,"y":389.5,"s":12.2},{"id":"c3","x":164.9,"y":388.9,"s":12.2},{"id":"c4","x":189.7,"y":411.5,"s":12.2},{"id":"c5","x":302.9,"y":411.6,"s":12.2},{"id":"c6","x":407.3,"y":411.9,"s":12.2},{"id":"c7","x":43.1,"y":430.8,"s":12.2},{"id":"c8","x":144.4,"y":431.1,"s":12.2},{"id":"c9","x":242.1,"y":459.0,"s":12.2},{"id":"c10","x":331.3,"y":459.4,"s":12.2},{"id":"c11","x":456.8,"y":459.0,"s":12.2},{"id":"c12","x":457.2,"y":543.8,"s":12.2},{"id":"c13","x":497.2,"y":543.7,"s":12.2},{"id":"c14","x":372.2,"y":566.7,"s":12.2},{"id":"c15","x":419.0,"y":566.7,"s":12.2},{"id":"c16","x":457.2,"y":567.0,"s":12.2},{"id":"c17","x":497.2,"y":566.8,"s":12.2},{"id":"c18","x":71.8,"y":585.2,"s":12.2},{"id":"c19","x":183.8,"y":604.2,"s":12.2},{"id":"c20","x":293.0,"y":604.2,"s":12.2},{"id":"c21","x":419.8,"y":604.9,"s":12.2}]};
+  const SPECS = window.FORM_SPECS; // forms-spec.js สร้างโดย db/build_form_specs.py (ตำแหน่งช่องกรอกของแต่ละฟอร์ม หน่วย pt ของ PDF)
+  // photo = ช่อง "ติดรูป" (pt) ถ้าฟอร์มนั้นมี (1050 เท่านั้น)
+  const FORMS = {
+    '1050': { th: 'แบบติดต่องานทะเบียน 1050', short: '1050', image: 'assets/form1050.png', photo: { x: 474.5, y: 108.2, w: 80.7, h: 93.7 } },
+    '1020': { th: 'แบบขอเสนอหัวหน้า 1020', short: '1020', image: 'assets/form1020.png' },
+    '2020': { th: 'แบบติดต่อบัตรสมาชิกบำรุง 2020', short: '2020', image: 'assets/form2020.png' },
+  };
+  window.FORM_TYPES = FORMS;
+  const REGION = 'มหานคร 3'; // ภูมิภาคของรวมภาคกรุงเทพ 11 (ตามไฟล์รายชื่อห้องที่ระลึก) ใช้กรอกช่อง "ภูมิภาค" แก้ไขได้
+  let type = null, spec = null;
 
   const TEXT_PT = 10.5;   // ขนาดตัวอักษรในช่องข้อความ (pt)
   const DIGIT_PT = 11.5;  // ขนาดตัวเลขในกรอบ
   const INK = '#0a2a6e';
-  // ช่อง "ติดรูป" ในฟอร์ม (pt) และขนาดรูปที่ย่อแล้ว (px, สัดส่วนเดียวกับช่อง ~ 40KB ต่อรูป)
-  const PHOTO = { x: 474.5, y: 108.2, w: 80.7, h: 93.7 };
+  // ขนาดรูปที่ย่อแล้ว (px, สัดส่วนเดียวกับช่อง "ติดรูป" ~ 40KB ต่อรูป)
   const PHOTO_W = 360, PHOTO_H = 418, PHOTO_MAX_BYTES = 70000;
   const DESIGN_W = 920;   // ความกว้างหน้ากระดาษ (px) ที่ตัวอักษรในช่องได้ >= 16px (iOS ไม่ซูมตอนแตะ) ย่อให้พอดีจอด้วย --s
   const COARSE = window.matchMedia('(pointer: coarse)').matches; // จอสัมผัส: ไม่ย่อตัวอักษรตามความยาว (ย่อแล้วต่ำกว่า 16px จะทำให้ iOS ซูม)
-  const pctX = v => `${(v / SPEC.w * 100).toFixed(3)}%`;
-  const pctY = v => `${(v / SPEC.h * 100).toFixed(3)}%`;
+  const pctX = v => `${(v / spec.w * 100).toFixed(3)}%`;
+  const pctY = v => `${(v / spec.h * 100).toFixed(3)}%`;
   const sizeCss = pt => `calc(${pt} * var(--pt))`;
 
   let dlg = null, page = null, fitBox = null, scroller = null, ro = null, fileInput = null, photoBox = null;
@@ -43,56 +51,13 @@
     fitBox = dlg.querySelector('.form-fit');
     scroller = dlg.querySelector('.form-scroll');
 
-    for (const f of SPEC.fields) {
-      const i = document.createElement('input');
-      i.type = 'text';
-      i.className = 'f1050-t';
-      i.dataset.id = f.id;
-      i.autocomplete = 'off';
-      i.spellcheck = false;
-      i.setAttribute('aria-label', f.id === 'name' ? 'ชื่อ-สกุล' : 'ช่องกรอก');
-      Object.assign(i.style, { left: pctX(f.x), top: pctY(f.y - 1), width: pctX(f.w), height: pctY(f.h + 1) });
-      page.append(i);
-    }
-    for (const b of SPEC.boxes) {
-      b.xs.forEach((x, k) => {
-        const i = document.createElement('input');
-        i.type = 'text';
-        i.inputMode = 'numeric';
-        i.maxLength = 1;
-        i.className = 'f1050-d';
-        i.dataset.row = b.id;
-        i.dataset.k = k;
-        i.autocomplete = 'off';
-        i.setAttribute('aria-label', `เลขหมายประจำตัว หลักที่ ${k + 1}`);
-        Object.assign(i.style, { left: pctX(x), top: pctY(b.y), width: pctX(b.w), height: pctY(b.h) });
-        page.append(i);
-      });
-    }
-    for (const c of SPEC.circles) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'f1050-c';
-      btn.dataset.id = c.id;
-      btn.setAttribute('aria-pressed', 'false');
-      btn.setAttribute('aria-label', 'ติ๊กเลือก');
-      Object.assign(btn.style, { left: pctX(c.x), top: pctY(c.y), width: pctX(c.s), height: pctY(c.s) });
-      btn.addEventListener('click', () => btn.setAttribute('aria-pressed', String(btn.getAttribute('aria-pressed') !== 'true')));
-      page.append(btn);
-    }
-
-    photoBox = document.createElement('div');
-    photoBox.className = 'f1050-photo';
-    Object.assign(photoBox.style, { left: pctX(PHOTO.x), top: pctY(PHOTO.y), width: pctX(PHOTO.w), height: pctY(PHOTO.h) });
-    photoBox.innerHTML = '<img class="f1050-photo-img" alt="รูปถ่าย" hidden><button type="button" class="f1050-photo-pick" aria-label="เพิ่มหรือเปลี่ยนรูปถ่าย"><span>เพิ่มรูป</span></button>';
-    photoBox.querySelector('.f1050-photo-pick').addEventListener('click', () => fileInput.click());
-    page.append(photoBox);
     fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     fileInput.hidden = true;
     fileInput.addEventListener('change', onPickPhoto);
     dlg.append(fileInput);
+
 
     page.addEventListener('input', e => {
       const t = e.target;
@@ -130,6 +95,67 @@
 
     const reset = () => { if (crop.el) { crop.el.hidden = true; if (crop.prevSrc) URL.revokeObjectURL(crop.prevSrc.url); crop.prevSrc = null; } clearAll(); current = null; };
     dlg.addEventListener('close', reset); // ปิดด้วย Esc หรือปุ่มปิด
+  }
+
+  // สร้างช่องกรอกของฟอร์มชนิด t (เรียกตอนเปิด ถ้าชนิดเปลี่ยน)
+  function mountForm(t) {
+    resetPhoto(false);                         // ล้างรูป/ต้นฉบับของฟอร์มก่อนหน้า (ถ้ามี)
+    type = t;
+    spec = SPECS[t];
+    page.querySelectorAll('.f1050-t, .f1050-d, .f1050-c, .f1050-photo').forEach(e => e.remove());
+    photoBox = null;
+    const bg = page.querySelector('img');
+    bg.src = FORMS[t].image;
+    bg.alt = FORMS[t].th;
+
+    for (const f of spec.fields) {
+      const i = document.createElement('input');
+      i.type = 'text';
+      i.className = 'f1050-t';
+      i.dataset.id = f.id;
+      i.autocomplete = 'off';
+      i.spellcheck = false;
+      i.setAttribute('aria-label', /name/.test(f.id) ? 'ชื่อ-สกุล' : 'ช่องกรอก');
+      Object.assign(i.style, { left: pctX(f.x), top: pctY(f.y - 1), width: pctX(f.w), height: pctY(f.h + 1) });
+      const extra = Math.max(0, 0.38 * (f.h - 15.4)); // บรรทัดสูงกว่า 15.4pt (แบบ 1050) ดันตัวอักษรลงให้ชิดเส้นจุด
+      if (extra) i.style.paddingTop = `calc(${extra.toFixed(2)} * var(--pt))`;
+      page.append(i);
+    }
+    for (const b of spec.boxes) {
+      b.xs.forEach((x, k) => {
+        const i = document.createElement('input');
+        i.type = 'text';
+        i.inputMode = 'numeric';
+        i.maxLength = 1;
+        i.className = 'f1050-d';
+        i.dataset.row = b.id;
+        i.dataset.k = k;
+        i.autocomplete = 'off';
+        i.setAttribute('aria-label', `เลขหมายประจำตัว หลักที่ ${k + 1}`);
+        Object.assign(i.style, { left: pctX(x), top: pctY(b.y), width: pctX(b.w), height: pctY(b.h) });
+        page.append(i);
+      });
+    }
+    for (const c of spec.circles) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'f1050-c';
+      btn.dataset.id = c.id;
+      btn.setAttribute('aria-pressed', 'false');
+      btn.setAttribute('aria-label', 'ติ๊กเลือก');
+      Object.assign(btn.style, { left: pctX(c.x), top: pctY(c.y), width: pctX(c.w ?? c.s), height: pctY(c.h ?? c.s) });
+      btn.addEventListener('click', () => btn.setAttribute('aria-pressed', String(btn.getAttribute('aria-pressed') !== 'true')));
+      page.append(btn);
+    }
+    const ph = FORMS[t].photo;
+    if (ph) {
+      photoBox = document.createElement('div');
+      photoBox.className = 'f1050-photo';
+      Object.assign(photoBox.style, { left: pctX(ph.x), top: pctY(ph.y), width: pctX(ph.w), height: pctY(ph.h) });
+      photoBox.innerHTML = '<img class="f1050-photo-img" alt="รูปถ่าย" hidden><button type="button" class="f1050-photo-pick" aria-label="เพิ่มหรือเปลี่ยนรูปถ่าย"><span>เพิ่มรูป</span></button>';
+      photoBox.querySelector('.f1050-photo-pick').addEventListener('click', () => fileInput.click());
+      page.append(photoBox);
+    }
   }
 
   // ---------- รูปถ่าย ----------
@@ -359,21 +385,38 @@
     page.querySelectorAll(`.f1050-d[data-row="${rowId}"]`).forEach((i, k) => { i.value = /\d/.test(str?.[k] || '') ? str[k] : ''; });
   }
 
-  // กรอกส่วนบนสุดจากข้อมูลสมาชิก: เลขหมายประจำตัว, ชื่อ-สกุล, เขต, ตำบล, หมู่, วันที่เขียนเอกสาร
-  function fillFromMember(d) {
-    clearAll();
-    setDigits('idtop', String(d.id || '').replace(/\D/g, '').slice(0, 8));
-    for (const [id, v] of [['name', d.name], ['khet', d.khet], ['tambon', d.tambon], ['moo', d.moo], ['date', d.date || thaiToday()]]) {
-      const i = textField(id);
-      if (i) i.value = v || '';
-    }
-  }
+  const id8 = x => String(x || '').replace(/\D/g, '').slice(0, 8);
+  const todayParts = () => { const n = new Date(); return { d: String(n.getDate()), m: String(n.getMonth() + 1), y: String(n.getFullYear() + 543) }; };
+  // กรอกส่วนที่รู้จากข้อมูลสมาชิก d = { id, name, rwp, phak, khet, tambon, moo, fa, po, date?, me? } (me = ผู้ใช้ที่ล็อกอิน ใช้ในแบบ 1020 ส่วน "รายละเอียดผู้ขอ")
+  const PREFILL = {
+    '1050': d => ({ text: { name: d.name, khet: d.khet, tambon: d.tambon, moo: d.moo, date: d.date || thaiToday() }, digits: { idtop: id8(d.id) } }),
+    '1020': d => {
+      const t = todayParts(), me = d.me || {};
+      return {
+        text: {
+          p1_name: d.name, p1_old_pos: d.po, p1_old_region: REGION, p1_old_rwp: d.rwp, p1_old_phak: d.phak, p1_old_khet: d.khet, p1_old_tambon: d.tambon, p1_old_moo: d.moo,
+          rq_name: me.name, rq_pos: me.po, rq_region: me.name ? REGION : '', rq_rwp: me.rwp, rq_phak: me.phak, rq_khet: me.khet, rq_d: t.d, rq_m: t.m, rq_y: t.y,
+        },
+        digits: { p1_id: id8(d.id), ...(me.id ? { rq_id: id8(me.id) } : {}) },
+      };
+    },
+    '2020': d => {
+      const t = todayParts();
+      return { text: { s1_d: t.d, s1_m: t.m, s1_y: t.y, s1_name: d.name, s1_fa: d.fa, s1_region: REGION, s1_rwp: d.rwp, s1_phak: d.phak, s1_khet: d.khet, s1_pname: d.name }, digits: { s1_id: id8(d.id) } };
+    },
+  };
+  const HINTS = {
+    '1050': 'ช่องส่วนบนสุดกรอกให้แล้ว คลิกช่องจุดไข่ปลาเพื่อพิมพ์หรือแก้ไข คลิกวงกลมเพื่อติ๊ก ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
+    '1020': 'ลำดับที่ 1 และ "รายละเอียดผู้ขอ" กรอกให้แล้ว (ระบบการใหม่ หน้าที่เสนอใหม่ ลำดับที่ 2-4 กรอกเองได้) ทุกช่องแก้ไขได้ ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
+    '2020': 'ใบแรกกรอกให้แล้ว (ใบที่ 2-3 กรอกเองได้ ติ๊กช่องที่ต้องการด้วย) ทุกช่องแก้ไขได้ ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
+  };
+  function fillFromMember(d) { apply(PREFILL[type](d || {})); }
 
   // ค่าทั้งหมดในฟอร์ม -> { text:{id:ค่า}, digits:{แถว:"12345678" (ช่องว่าง = ว่าง)}, ticks:[id,...] } เก็บเฉพาะที่มีค่า
   function collect() {
     const text = {}, digits = {}, ticks = [];
     page.querySelectorAll('.f1050-t').forEach(i => { const v = i.value.trim(); if (v) text[i.dataset.id] = v; });
-    for (const b of SPEC.boxes) {
+    for (const b of spec.boxes) {
       const s = [...page.querySelectorAll(`.f1050-d[data-row="${b.id}"]`)].map(i => i.value || ' ').join('');
       if (s.trim()) digits[b.id] = s;
     }
@@ -383,7 +426,7 @@
 
   function apply(v) {
     clearAll();
-    for (const [id, val] of Object.entries(v?.text || {})) { const i = textField(id); if (i) i.value = String(val); }
+    for (const [id, val] of Object.entries(v?.text || {})) { const i = textField(id); if (i && val) i.value = String(val); }
     for (const [row, s] of Object.entries(v?.digits || {})) setDigits(row, String(s));
     for (const id of v?.ticks || []) page.querySelector(`.f1050-c[data-id="${id}"]`)?.setAttribute('aria-pressed', 'true');
   }
@@ -426,7 +469,7 @@
       });
     }
     if (current.opts.refill && current.d) add('กรอกใหม่จากข้อมูล', '', () => { fillFromMember(current.d); requestAnimationFrame(fitAll); });
-    if (current.opts.photoEditable !== false) {
+    if (FORMS[type].photo && current.opts.photoEditable !== false) {
       add('📷 เพิ่ม/เปลี่ยนรูป', '', () => fileInput.click());
       const adj = add('ปรับตำแหน่ง/ขนาดรูป', '', () => openCropper('adjust'));
       adj.dataset.photoAdjust = '1';
@@ -445,7 +488,7 @@
     if (!blob) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${current?.opts.fileName || '1050'}.png`;
+    a.download = `${current?.opts.fileName || type}.png`;
     document.body.append(a);
     a.click();
     a.remove();
@@ -454,7 +497,8 @@
 
   // ---------- วาดฟอร์มที่กรอกแล้วเป็นรูป PNG ----------
   // วาดจากค่า (collect()) ลงบนภาพฟอร์มเปล่าโดยตรง ไม่พึ่งหน้าต่างฟอร์ม จึงใช้ส่งหลายฉบับรวดเดียวจากหน้าแอดมินได้ (window.renderForm1050Png)
-  let baseImg = null, fontsReady = false;
+  const baseImgs = {};
+  let fontsReady = false;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   // onload แทน decode(): decode() อาจค้างเมื่อแท็บอยู่เบื้องหลัง
   const loadImg = url => new Promise((res, rej) => {
@@ -463,9 +507,9 @@
     i.onerror = () => rej(new Error('โหลดรูปไม่สำเร็จ'));
     i.src = url;
   });
-  async function baseImage() {
-    if (!baseImg) baseImg = await loadImg('assets/form1050.png');
-    return baseImg;
+  async function baseImage(t) {
+    if (!baseImgs[t]) baseImgs[t] = await loadImg(FORMS[t].image);
+    return baseImgs[t];
   }
   async function ensureFonts() {
     if (fontsReady) return;
@@ -474,9 +518,11 @@
     fontsReady = true;
   }
 
-  async function renderValuesPng(values, photoUrl) {
-    const [img] = await Promise.all([baseImage(), ensureFonts()]);
-    const W = img.naturalWidth, H = img.naturalHeight, kpt = W / SPEC.w;
+  // t = ชนิดฟอร์ม ('1050' | '1020' | '2020'), values = ผลของ collect()
+  async function renderValuesPng(t, values, photoUrl) {
+    const sp = SPECS[t];
+    const [img] = await Promise.all([baseImage(t), ensureFonts()]);
+    const W = img.naturalWidth, H = img.naturalHeight, kpt = W / sp.w;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
@@ -485,40 +531,43 @@
     ctx.strokeStyle = INK;
     ctx.textBaseline = 'alphabetic';
 
-    for (const f of SPEC.fields) {
+    for (const f of sp.fields) {
       const v = values?.text?.[f.id];
       if (!v) continue;
       let pt = TEXT_PT;
       ctx.font = `${pt * kpt}px Prompt, sans-serif`;
       while (pt > 6 && ctx.measureText(v).width > (f.w - 2) * kpt) { pt -= 0.5; ctx.font = `${pt * kpt}px Prompt, sans-serif`; } // ย่อให้พอดีช่อง
       ctx.textAlign = 'left';
-      ctx.fillText(v, (f.x + 1) * kpt, (f.y + f.h - 4.8) * kpt);
+      ctx.fillText(v, (f.x + 1) * kpt, (f.y + f.h * 0.69) * kpt);
     }
     ctx.textAlign = 'center';
     ctx.font = `500 ${DIGIT_PT * kpt}px Prompt, sans-serif`;
-    for (const b of SPEC.boxes) {
+    for (const b of sp.boxes) {
       const s = String(values?.digits?.[b.id] || '');
-      b.xs.forEach((x, k) => { if (/\d/.test(s[k] || '')) ctx.fillText(s[k], (x + b.w / 2) * kpt, (b.y + b.h - 3) * kpt); });
+      b.xs.forEach((x, k) => { if (/\d/.test(s[k] || '')) ctx.fillText(s[k], (x + b.w / 2) * kpt, (b.y + b.h * 0.8) * kpt); });
     }
-    if (photoUrl) {
-      try { ctx.drawImage(await loadImg(photoUrl), PHOTO.x * kpt, PHOTO.y * kpt, PHOTO.w * kpt, PHOTO.h * kpt); } catch { /* ไม่มีรูป: ข้าม */ }
+    const ph = FORMS[t].photo;
+    if (photoUrl && ph) {
+      try { ctx.drawImage(await loadImg(photoUrl), ph.x * kpt, ph.y * kpt, ph.w * kpt, ph.h * kpt); } catch { /* ไม่มีรูป: ข้าม */ }
     }
     ctx.lineWidth = 1.7 * kpt;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     const ticks = new Set(values?.ticks || []);
-    for (const c of SPEC.circles) {
+    for (const c of sp.circles) {
       if (!ticks.has(c.id)) continue;
+      const w = c.w ?? c.s, h = c.h ?? c.s;
       ctx.beginPath();
-      ctx.moveTo((c.x + c.s * 0.2) * kpt, (c.y + c.s * 0.55) * kpt);
-      ctx.lineTo((c.x + c.s * 0.43) * kpt, (c.y + c.s * 0.78) * kpt);
-      ctx.lineTo((c.x + c.s * 0.82) * kpt, (c.y + c.s * 0.2) * kpt);
+      ctx.moveTo((c.x + w * 0.2) * kpt, (c.y + h * 0.55) * kpt);
+      ctx.lineTo((c.x + w * 0.43) * kpt, (c.y + h * 0.78) * kpt);
+      ctx.lineTo((c.x + w * 0.82) * kpt, (c.y + h * 0.2) * kpt);
       ctx.stroke();
     }
     return new Promise(res => cv.toBlob(res, 'image/png'));
   }
-  window.renderForm1050Png = renderValuesPng;
-  const renderPng = () => renderValuesPng(collect(), photo.url);
+  window.renderFormPng = renderValuesPng;                                              // (ชนิด, values, photoUrl)
+  window.renderForm1050Png = (values, photoUrl) => renderValuesPng('1050', values, photoUrl); // เดิม
+  const renderPng = () => renderValuesPng(type, collect(), photo.url);
 
   // ---------- สถานะ/ขั้นตอนของแบบฟอร์มที่ส่งไปหลังบ้าน (ใช้ทั้งหน้าโทกังและหน้าแอดมิน) ----------
   // คำนวณจากคอลัมน์ที่มีอยู่: status (pending/approved/rejected) + emailed_at; ไม่มีคอลัมน์สถานะเพิ่ม
@@ -553,21 +602,25 @@
   //          photoUrl (blob: URL ของรูปเดิม ฟอร์มจะ revoke ให้เมื่อปิด), photoEditable (ค่าเริ่มต้น true),
   //          fileName, actions: [{ label, kind: 'primary'|'danger', run: async (values, { photoBlob, photoRemoved, renderPng }) => ข้อความสำเร็จ, close, confirm }] }
   //          photoBlob = รูปใหม่ที่ย่อแล้ว (JPEG ~40KB) หรือ null, photoRemoved = ผู้ใช้เอารูปเดิมออก
-  window.openForm1050 = function (d, opts = {}) {
+  function openForm(t, d, opts = {}) {
+    if (!FORMS[t]) throw new Error(`ไม่รู้จักแบบฟอร์ม ${t}`);
     if (!dlg) build();
+    if (t !== type) mountForm(t);
     current = { d, opts };
-    dlg.querySelector('#f1050Title').textContent = opts.title || 'แบบติดต่องานทะเบียน 1050';
+    dlg.querySelector('#f1050Title').textContent = opts.title || FORMS[t].th;
     const meta = dlg.querySelector('#f1050Meta');
     meta.hidden = !opts.meta;
     meta.textContent = opts.meta || '';
-    dlg.querySelector('#f1050Hint').textContent = opts.hint || 'ช่องส่วนบนสุดกรอกให้แล้ว คลิกช่องจุดไข่ปลาเพื่อพิมพ์หรือแก้ไข คลิกวงกลมเพื่อติ๊ก ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย';
+    dlg.querySelector('#f1050Hint').textContent = opts.hint || HINTS[t];
     setStatus('', '');
     busy = false;
     if (opts.values) apply(opts.values); else fillFromMember(d);
-    if (opts.photoUrl) { photo = { blob: null, url: opts.photoUrl, existing: true, removed: false }; showPhoto(opts.photoUrl); }
+    if (opts.photoUrl && photoBox) { photo = { blob: null, url: opts.photoUrl, existing: true, removed: false }; showPhoto(opts.photoUrl); }
     updatePhotoButtons();
     renderActions();
     if (!dlg.open) dlg.showModal();
     requestAnimationFrame(fitAll);
-  };
+  }
+  window.openForm = openForm;                                   // (ชนิด, d, opts)
+  window.openForm1050 = (d, opts) => openForm('1050', d, opts); // เดิม
 })();

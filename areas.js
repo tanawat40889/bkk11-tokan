@@ -413,7 +413,7 @@ function accessRow(r) {
   return card;
 }
 
-// ---------- แบบฟอร์ม 1050 ----------
+// ---------- แบบฟอร์ม (1050 / 1020 / 2020) ----------
 // สมาชิกส่งจากหน้าโทกัง (ตาราง form_1050) หลังบ้านเปิดดู แก้ไข อนุมัติ/ไม่อนุมัติ ผ่านฟังก์ชัน form1050_admin_* (ตรวจ is_ymd_rwp_leader())
 const MAX_BATCH = 10; // ส่งอีเมลรวมได้ครั้งละไม่เกินนี้ (ไฟล์แนบรวมต้องไม่ใหญ่เกินที่อีเมลรับได้)
 let formRows = [];           // แถวล่าสุดที่แสดงในแท็บแบบฟอร์ม
@@ -440,6 +440,8 @@ async function renderForms() {
     let rows = await rpc('form1050_admin_list', { p_status: status, p_limit: 200 });
     if (f === 'approved_unsent') rows = rows.filter(r => !r.emailed_at);
     if (f === 'sent') rows = rows.filter(r => r.emailed_at);
+    const tf = $('formType').value;
+    if (tf) rows = rows.filter(r => (r.form_type || '1050') === tf);
     list.replaceChildren();
     if (!rows.length) list.append(el('p', 'dim', f === 'pending' ? 'ไม่มีแบบฟอร์มที่รอตรวจสอบ' : 'ไม่มีแบบฟอร์มในสถานะนี้'));
     formRows = rows;
@@ -449,7 +451,7 @@ async function renderForms() {
     if (f === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
     renderPhotoStats();
   } catch (e) {
-    list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์ดูแบบฟอร์ม 1050' : e.message));
+    list.replaceChildren(el('p', 'login-error', e.code === '42501' ? 'ไม่มีสิทธิ์ดูแบบฟอร์ม' : e.message));
   }
 }
 
@@ -493,7 +495,7 @@ function formRow(r) {
     pick.append(cb);
     head.append(pick);
   }
-  head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), form1050Chip(r));
+  head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), el('span', 'chip-state', `แบบ ${r.form_type || '1050'}`), form1050Chip(r));
   if (r.edited_by_admin) head.append(el('span', 'chip-state', 'แอดมินแก้ไขแล้ว'));
   if (r.photo_path) head.append(el('span', 'chip-state', 'มีรูป'));
   card.append(head, form1050Steps(r), el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
@@ -507,7 +509,7 @@ function formRow(r) {
   return card;
 }
 
-// ส่งอีเมลแบบ 1050 (แนบรูป PNG ของฟอร์มที่กำลังเปิดอยู่) ผ่าน Edge Function form1050-mail: เฉพาะแอดมิน และต้องอนุมัติแล้วเท่านั้น
+// ส่งอีเมลแบบฟอร์ม (แนบรูป PNG ของฟอร์มที่กำลังเปิดอยู่) ผ่าน Edge Function form1050-mail: เฉพาะแอดมิน และต้องอนุมัติแล้วเท่านั้น
 async function callFormMail(body, retried = false) {
   let res;
   try {
@@ -561,7 +563,7 @@ async function bulkSend() {
       if (r.photo_path) {
         try { url = await photoLoad(r.photo_path); urls.push(url); } catch { throw new Error(`โหลดรูปถ่ายของ ${r.name_snap || r.mt_co} ไม่สำเร็จ`); }
       }
-      items.push({ id: r.id, png: await blobToB64(await renderForm1050Png(r.data, url)) });
+      items.push({ id: r.id, png: await blobToB64(await renderFormPng(r.form_type || '1050', r.data, url)) });
     }
     say('กำลังส่งอีเมล…', 'busy');
     const d = await callFormMail({ items });
@@ -643,13 +645,14 @@ async function openFormRow(r) {
     },
   });
   const label = form1050State(r).label;
-  openForm1050(null, {
-    title: `แบบ 1050 · ${r.name_snap || r.mt_co}`,
+  const ftype = r.form_type || '1050';
+  openForm(ftype, null, {
+    title: `${FORM_TYPES[ftype].th} · ${r.name_snap || r.mt_co}`,
     meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}${photoNote}`,
     hint: 'แก้ไขได้ทุกช่อง รวมถึงเพิ่ม/เปลี่ยน/ลบรูป กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ + ส่งอีเมล" เพื่อเก็บการแก้ไข อนุมัติ และส่งอีเมลพร้อมรูปฟอร์มที่แก้แล้ว',
     values: r.data,
     photoUrl,
-    fileName: `1050-${r.mt_co}`,
+    fileName: `${ftype}-${r.mt_co}`,
     actions,
   });
 }
@@ -700,6 +703,7 @@ function initUi() {
   });
   $('accessForm').addEventListener('submit', e => { e.preventDefault(); renderAccess(); });
   $('formStatus').addEventListener('change', () => { formSel.clear(); renderForms(); });
+  $('formType').addEventListener('change', () => { formSel.clear(); renderForms(); });
   $('formSelAll').addEventListener('change', e => {
     const rows = formRows.filter(selectable);
     formSel.clear();
@@ -754,7 +758,7 @@ async function init() {
   showMsg('');
   $('content').hidden = false;
   renderAll();
-  renderForms(); // แท็บแรก = แบบฟอร์ม 1050 (ตัวเลขรออนุมัติบนแท็บอัปเดตเอง)
+  renderForms(); // แท็บแรก = แบบฟอร์ม (ตัวเลขรออนุมัติบนแท็บอัปเดตเอง)
 }
 
 init();

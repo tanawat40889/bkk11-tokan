@@ -843,9 +843,9 @@ async function storageCall(path, init, retried = false) {
   return res;
 }
 
-// ส่งแบบติดต่อ 1050 ไปหลังบ้าน: (ถ้ามีรูป) อัปโหลดรูปที่ย่อแล้วขึ้น bucket form1050-photos ก่อน แล้ว insert ตาราง form_1050
+// ส่งแบบฟอร์ม (1050 / 1020 / 2020) ไปหลังบ้าน: (ถ้ามีรูป) อัปโหลดรูปที่ย่อแล้วขึ้น bucket form1050-photos ก่อน แล้ว insert ตาราง form_1050
 // RLS ตรวจว่าเป็นสมาชิกที่ผู้ส่งมองเห็น และไม่เกิน 30 ฉบับ/ชั่วโมง; ถ้า insert ไม่ผ่านจะลบรูปที่เพิ่งอัปโหลดทิ้ง
-async function submitForm1050(mtCo, values, photoBlob, retried = false) {
+async function submitForm(formType, mtCo, values, photoBlob, retried = false) {
   const s = loadSession();
   let photoPath = null;
   if (photoBlob) {
@@ -858,12 +858,12 @@ async function submitForm1050(mtCo, values, photoBlob, retried = false) {
     res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ mt_co: mtCo, data: values, photo_path: photoPath }),
+      body: JSON.stringify({ mt_co: mtCo, data: values, photo_path: photoPath, form_type: formType }),
     });
   } catch { res = null; }
   if (res && res.status === 401 && !retried) {
     const next = await refreshSession(s).catch(() => null);
-    if (next) { saveSession(next); if (photoPath) await storageCall(`object/form1050-photos/${photoPath}`, { method: 'DELETE' }).catch(() => {}); return submitForm1050(mtCo, values, photoBlob, true); }
+    if (next) { saveSession(next); if (photoPath) await storageCall(`object/form1050-photos/${photoPath}`, { method: 'DELETE' }).catch(() => {}); return submitForm(formType, mtCo, values, photoBlob, true); }
   }
   if (!res || !res.ok) {
     if (photoPath) storageCall(`object/form1050-photos/${photoPath}`, { method: 'DELETE' }).catch(() => {});
@@ -872,11 +872,11 @@ async function submitForm1050(mtCo, values, photoBlob, retried = false) {
   }
 }
 
-// แบบ 1050 ที่ "ฉัน" ส่งเกี่ยวกับคนนี้ พร้อมขั้นตอนปัจจุบัน (RLS: ผู้ส่งเห็นเฉพาะที่ตัวเองส่ง, แอดมินเห็นทั้งหมด)
+// แบบฟอร์ม (1050/1020/2020) ที่ "ฉัน" ส่งเกี่ยวกับคนนี้ พร้อมขั้นตอนปัจจุบัน (RLS: ผู้ส่งเห็นเฉพาะที่ตัวเองส่ง, แอดมินเห็นทั้งหมด)
 async function loadForm1050History(rec, box) {
   try {
     const s = loadSession();
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050?select=id,status,submitted_at,reviewed_at,emailed_at,admin_note&mt_co=eq.${Number(rec.mt_co)}&order=submitted_at.desc&limit=5`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/form_1050?select=id,status,submitted_at,reviewed_at,emailed_at,admin_note,form_type&mt_co=eq.${Number(rec.mt_co)}&order=submitted_at.desc&limit=5`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
     });
     if (!res.ok) return;
@@ -885,13 +885,13 @@ async function loadForm1050History(rec, box) {
     box.replaceChildren();
     const title = document.createElement('p');
     title.className = 'f1050-history-title';
-    title.textContent = 'แบบ 1050 ที่ส่งไว้';
+    title.textContent = 'แบบฟอร์มที่ส่งไว้';
     box.append(title);
     for (const f of rows) {
       const item = document.createElement('div');
       item.className = 'f1050-history-item';
       const when = document.createElement('p');
-      when.textContent = `ส่งเมื่อ ${new Date(f.submitted_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}`;
+      when.textContent = `แบบ ${f.form_type || '1050'} · ส่งเมื่อ ${new Date(f.submitted_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}`;
       item.append(form1050Chip(f), form1050Steps(f), when);
       if (f.status === 'rejected' && f.admin_note) {
         const note = document.createElement('p');
@@ -936,7 +936,11 @@ function openDetail(rec) {
     <dl class="detail-grid">
       ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
     </dl>
-    <button type="button" class="form1050-btn" id="form1050Btn">📄 กรอกแบบติดต่อ 1050</button>
+    <div class="form-btns">
+      <button type="button" class="form1050-btn" data-form="1050">📄 แบบติดต่องานทะเบียน 1050</button>
+      <button type="button" class="form1050-btn" data-form="1020">📄 แบบขอเสนอหัวหน้า 1020 (เสนอคนนี้)</button>
+      <button type="button" class="form1050-btn" data-form="2020">📄 แบบติดต่อบัตรสมาชิกบำรุง 2020</button>
+    </div>
     <div class="f1050-history" id="form1050History" hidden></div>
     ${familyMembers.length ? `
       <div class="family-section">
@@ -977,27 +981,36 @@ function openDetail(rec) {
   });
   bindInvite(body, rec);
   loadForm1050History(rec, body.querySelector('#form1050History'));
-  body.querySelector('#form1050Btn').addEventListener('click', () => openForm1050({
-    id: String(rec.mt_co).padStart(8, '0'),
-    name: fullName(rec),
-    khet: rec.sh_nt || '',
-    tambon: rec.ch_nt || '',
-    moo: rec.ha_nt || '',
-  }, {
-    refill: true,
-    fileName: `1050-${rec.mt_co}`,
-    actions: [{
-      label: 'ส่งไปหลังบ้าน',
-      kind: 'primary',
-      close: true,
-      confirm: 'ส่งแบบฟอร์มนี้ไปหลังบ้านเพื่อตรวจสอบและอนุมัติ?',
-      run: async (values, { photoBlob }) => {
-        await submitForm1050(rec.mt_co, values, photoBlob);
-        const hist = document.getElementById('form1050History');
-        if (hist) loadForm1050History(rec, hist);
-        return 'ส่งแล้ว ✅ รอหลังบ้านตรวจสอบและอนุมัติ';
-      },
-    }],
+  body.querySelectorAll('[data-form]').forEach(btn => btn.addEventListener('click', () => {
+    const type = btn.dataset.form;
+    const meRec = allRecords.find(r => r.mt_co === myMtCo()); // ผู้ใช้ที่ล็อกอิน (ใช้กรอก "รายละเอียดผู้ขอ" ในแบบ 1020)
+    openForm(type, {
+      id: String(rec.mt_co).padStart(8, '0'),
+      name: fullName(rec),
+      rwp: rec.rwp_nt || '',
+      phak: rec.phak_nt || '',
+      khet: rec.sh_nt || '',
+      tambon: rec.ch_nt || '',
+      moo: rec.ha_nt || '',
+      fa: rec.fa_nt || '',
+      po: rec.po_nt || '',
+      me: meRec ? { id: String(meRec.mt_co).padStart(8, '0'), name: fullName(meRec), po: meRec.po_nt || '', rwp: meRec.rwp_nt || '', phak: meRec.phak_nt || '', khet: meRec.sh_nt || '' } : null,
+    }, {
+      refill: true,
+      fileName: `${type}-${rec.mt_co}`,
+      actions: [{
+        label: 'ส่งไปหลังบ้าน',
+        kind: 'primary',
+        close: true,
+        confirm: 'ส่งแบบฟอร์มนี้ไปหลังบ้านเพื่อตรวจสอบและอนุมัติ?',
+        run: async (values, { photoBlob }) => {
+          await submitForm(type, rec.mt_co, values, photoBlob);
+          const hist = document.getElementById('form1050History');
+          if (hist) loadForm1050History(rec, hist);
+          return 'ส่งแล้ว ✅ รอหลังบ้านตรวจสอบและอนุมัติ';
+        },
+      }],
+    });
   }));
   body.querySelectorAll('[data-family]').forEach(btn => {
     btn.addEventListener('click', () => {

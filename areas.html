@@ -35,7 +35,7 @@
 
   <div id="content" hidden>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="forms" aria-selected="true">แบบฟอร์ม 1050 <span id="formCount" class="badge" hidden></span></button>
+      <button type="button" role="tab" data-tab="forms" aria-selected="true">แบบฟอร์ม <span id="formCount" class="badge" hidden></span></button>
       <button type="button" role="tab" data-tab="tree" aria-selected="false">โครงสร้าง</button>
       <button type="button" role="tab" data-tab="mismatch" aria-selected="false">ชื่อที่ไม่ตรง <span id="mmCount" class="badge" hidden></span></button>
       <button type="button" role="tab" data-tab="access" aria-selected="false">สิทธิ์เข้าระบบ</button>
@@ -43,7 +43,7 @@
     </nav>
 
     <section id="paneForms">
-      <p class="hint">แบบติดต่อ 1050 ที่สมาชิกกดส่งมาจากหน้าโทกัง กด <b>เปิด / แก้ไข</b> เพื่อดู แก้ทุกช่องได้ แล้วกด <b>อนุมัติ</b> หรือ <b>ไม่อนุมัติ</b></p>
+      <p class="hint">แบบฟอร์ม 1050 / 1020 / 2020 ที่สมาชิกกดส่งมาจากหน้าโทกัง กด <b>เปิด / แก้ไข</b> เพื่อดู แก้ทุกช่องได้ แล้วกด <b>อนุมัติ</b> หรือ <b>ไม่อนุมัติ</b></p>
       <div class="toolbar">
         <select id="formStatus" aria-label="กรองตามสถานะ">
           <option value="pending">รอตรวจสอบ</option>
@@ -51,6 +51,12 @@
           <option value="sent">ส่งอีเมลแล้ว</option>
           <option value="rejected">ไม่อนุมัติ</option>
           <option value="">ทั้งหมด</option>
+        </select>
+        <select id="formType" aria-label="กรองตามชนิดแบบฟอร์ม">
+          <option value="">ทุกแบบ</option>
+          <option value="1050">แบบ 1050 (ติดต่องานทะเบียน)</option>
+          <option value="1020">แบบ 1020 (ขอเสนอหัวหน้า)</option>
+          <option value="2020">แบบ 2020 (บัตรสมาชิกบำรุง)</option>
         </select>
         <button type="button" id="formReload" class="btn-outline">รีเฟรช</button>
       </div>
@@ -120,6 +126,7 @@
   <div id="sheetBody"></div>
 </dialog>
 
+<script src="forms-spec.js"></script>
 <script src="form1050.js"></script>
 <script src="areas.js"></script>
 </body>

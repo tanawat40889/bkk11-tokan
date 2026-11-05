@@ -1121,11 +1121,12 @@ dialog#detailModal::backdrop {
   font-weight: 600;
 }
 
-/* ปุ่มเปิดแบบติดต่อ 1050 ในหน้ารายละเอียด (ตัวฟอร์มอยู่ที่ form1050.css) */
+/* ปุ่มเปิดแบบฟอร์ม 1050 / 1020 / 2020 ในหน้ารายละเอียด (ตัวฟอร์มอยู่ที่ form1050.css) */
+.form-btns { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 16px; }
 .form1050-btn {
   width: 100%;
   min-height: 44px;
-  margin: 4px 0 16px;
+  margin: 0;
   padding: 10px 14px;
   border: 1px solid var(--primary);
   border-radius: 8px;
