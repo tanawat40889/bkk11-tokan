@@ -140,3 +140,22 @@
 .frm .btn-outline { margin-top: 10px; }
 .chip-state.warn { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
 .frm-note { overflow-wrap: anywhere; }
+
+/* ---------- จอคอมพิวเตอร์ ---------- */
+@media (min-width: 900px) {
+  .areas { max-width: 1180px; padding-top: 12px; }
+  .tabs { gap: 8px; }
+  .tabs button { padding: 14px 20px; font-size: 1rem; }
+  /* โครงสร้าง/ชื่อที่ไม่ตรง เป็นรายการยาว: จำกัดความกว้างไว้ให้อ่านง่าย */
+  #paneTree, #paneMismatch { max-width: 820px; }
+  /* รายการแบบฟอร์ม/สิทธิ์: ข้อมูลซ้าย ปุ่มขวา แถวเดียวต่อรายการ */
+  .frm, .acc { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: center; padding: 12px 10px; }
+  .frm > .btn-outline, .acc > .btn-outline, .acc > .btn-danger { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; align-self: center; }
+  .frm > *, .acc > * { grid-column: 1; }
+  .frm:hover, .acc:hover { background: var(--surface-2); }
+  .toolbar { max-width: 640px; }
+  #formPhotoStats { margin-top: 0; }
+}
+@media (min-width: 1280px) {
+  .areas { max-width: 1320px; }
+}

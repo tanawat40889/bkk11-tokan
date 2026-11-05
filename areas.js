@@ -627,7 +627,7 @@ async function init() {
   showMsg('');
   $('content').hidden = false;
   renderAll();
-  refreshFormBadge();
+  renderForms(); // แท็บแรก = แบบฟอร์ม 1050 (ตัวเลขรออนุมัติบนแท็บอัปเดตเอง)
 }
 
 init();

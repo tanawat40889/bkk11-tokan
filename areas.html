@@ -35,14 +35,30 @@
 
   <div id="content" hidden>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="tree" aria-selected="true">โครงสร้าง</button>
+      <button type="button" role="tab" data-tab="forms" aria-selected="true">แบบฟอร์ม 1050 <span id="formCount" class="badge" hidden></span></button>
+      <button type="button" role="tab" data-tab="tree" aria-selected="false">โครงสร้าง</button>
       <button type="button" role="tab" data-tab="mismatch" aria-selected="false">ชื่อที่ไม่ตรง <span id="mmCount" class="badge" hidden></span></button>
       <button type="button" role="tab" data-tab="access" aria-selected="false">สิทธิ์เข้าระบบ</button>
-      <button type="button" role="tab" data-tab="forms" aria-selected="false">แบบฟอร์ม 1050 <span id="formCount" class="badge" hidden></span></button>
       <button type="button" role="tab" data-tab="log" aria-selected="false">ประวัติ</button>
     </nav>
 
-    <section id="paneTree">
+    <section id="paneForms">
+      <p class="hint">แบบติดต่อ 1050 ที่สมาชิกกดส่งมาจากหน้าโทกัง กด <b>เปิด / แก้ไข</b> เพื่อดู แก้ทุกช่องได้ แล้วกด <b>อนุมัติ</b> หรือ <b>ไม่อนุมัติ</b></p>
+      <div class="toolbar">
+        <select id="formStatus" aria-label="กรองตามสถานะ">
+          <option value="pending">รออนุมัติ</option>
+          <option value="approved">อนุมัติแล้ว</option>
+          <option value="rejected">ไม่อนุมัติ</option>
+          <option value="">ทั้งหมด</option>
+        </select>
+        <button type="button" id="formReload" class="btn-outline">รีเฟรช</button>
+      </div>
+      <p id="formPhotoStats" class="dim"></p>
+      <button type="button" id="formOrphanBtn" class="btn-outline" hidden></button>
+      <div id="formList"></div>
+    </section>
+
+    <section id="paneTree" hidden>
       <p id="summary" class="summary"></p>
       <div class="toolbar">
         <input id="search" type="search" placeholder="ค้นหาพื้นที่ เช่น พิศาล" autocomplete="off" aria-label="ค้นหาพื้นที่">
@@ -74,22 +90,6 @@
         <button type="submit" class="btn-outline">ค้นหา</button>
       </form>
       <div id="accessList"></div>
-    </section>
-
-    <section id="paneForms" hidden>
-      <p class="hint">แบบติดต่อ 1050 ที่สมาชิกกดส่งมาจากหน้าโทกัง กด <b>เปิด / แก้ไข</b> เพื่อดู แก้ทุกช่องได้ แล้วกด <b>อนุมัติ</b> หรือ <b>ไม่อนุมัติ</b></p>
-      <div class="toolbar">
-        <select id="formStatus" aria-label="กรองตามสถานะ">
-          <option value="pending">รออนุมัติ</option>
-          <option value="approved">อนุมัติแล้ว</option>
-          <option value="rejected">ไม่อนุมัติ</option>
-          <option value="">ทั้งหมด</option>
-        </select>
-        <button type="button" id="formReload" class="btn-outline">รีเฟรช</button>
-      </div>
-      <p id="formPhotoStats" class="dim"></p>
-      <button type="button" id="formOrphanBtn" class="btn-outline" hidden></button>
-      <div id="formList"></div>
     </section>
 
     <section id="paneLog" hidden>
