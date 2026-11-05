@@ -53,6 +53,12 @@
         </select>
         <button type="button" id="formReload" class="btn-outline">รีเฟรช</button>
       </div>
+      <div id="formBulk" class="bulk" hidden>
+        <label class="bulk-all"><input type="checkbox" id="formSelAll"> เลือกทั้งหมด</label>
+        <span id="formSelCount" class="dim"></span>
+        <button type="button" id="formBulkBtn" class="btn-solid" disabled>อนุมัติ + ส่งอีเมลที่เลือก (ฉบับเดียว)</button>
+      </div>
+      <p id="formBulkMsg" class="status" role="status" hidden></p>
       <p id="formPhotoStats" class="dim"></p>
       <button type="button" id="formOrphanBtn" class="btn-outline" hidden></button>
       <div id="formList"></div>

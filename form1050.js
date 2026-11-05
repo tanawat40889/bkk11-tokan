@@ -316,9 +316,8 @@
     if (!/^image\//.test(f.type)) { setStatus('ไฟล์ที่เลือกไม่ใช่รูปภาพ', 'err'); return; }
     setStatus('กำลังเปิดรูป…', 'busy');
     const url = URL.createObjectURL(f);
-    const img = new Image();
-    img.src = url;
-    try { await img.decode(); } catch { URL.revokeObjectURL(url); setStatus('เปิดรูปนี้ไม่ได้ ลองเลือกรูปอื่น (JPG หรือ PNG)', 'err'); return; }
+    let img;
+    try { img = await loadImg(url); } catch { URL.revokeObjectURL(url); setStatus('เปิดรูปนี้ไม่ได้ ลองเลือกรูปอื่น (JPG หรือ PNG)', 'err'); return; }
     crop.prevSrc = photoSrc;  // เก็บรูปเดิมไว้ก่อน เผื่อกดยกเลิก
     photoSrc = { url, img, z: 1, tx: null, ty: null };
     setStatus('', '');
@@ -453,14 +452,31 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
 
-  // วาดฟอร์มที่กรอกแล้ว (ข้อความ เลขหลัก ติ๊ก รูปถ่าย) ลงบนภาพฟอร์มเปล่า -> Blob PNG (ใช้ทั้งบันทึกเป็นรูปและแนบอีเมล)
-  async function renderPng() {
-    const img = page.querySelector('img');
-    // รอรูปกับฟอนต์ แต่ไม่รอนานเกิน 2 วินาที (ถ้าฟอนต์ไม่มา ใช้ฟอนต์สำรอง)
-    const wait = p => Promise.race([p.catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
-    await wait(img.decode());
-    await wait(document.fonts.load(`${TEXT_PT}px Prompt`, 'ก'));
-    const W = img.naturalWidth, H = img.naturalHeight, kpt = W / SPEC.w, kpx = W / page.clientWidth;
+  // ---------- วาดฟอร์มที่กรอกแล้วเป็นรูป PNG ----------
+  // วาดจากค่า (collect()) ลงบนภาพฟอร์มเปล่าโดยตรง ไม่พึ่งหน้าต่างฟอร์ม จึงใช้ส่งหลายฉบับรวดเดียวจากหน้าแอดมินได้ (window.renderForm1050Png)
+  let baseImg = null, fontsReady = false;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // onload แทน decode(): decode() อาจค้างเมื่อแท็บอยู่เบื้องหลัง
+  const loadImg = url => new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('โหลดรูปไม่สำเร็จ'));
+    i.src = url;
+  });
+  async function baseImage() {
+    if (!baseImg) baseImg = await loadImg('assets/form1050.png');
+    return baseImg;
+  }
+  async function ensureFonts() {
+    if (fontsReady) return;
+    // รอฟอนต์ไม่เกิน 2 วินาที (ถ้าฟอนต์ไม่มา ใช้ฟอนต์สำรอง)
+    await Promise.race([document.fonts.load(`${TEXT_PT}px Prompt`, 'ก').catch(() => {}), sleep(2000)]);
+    fontsReady = true;
+  }
+
+  async function renderValuesPng(values, photoUrl) {
+    const [img] = await Promise.all([baseImage(), ensureFonts()]);
+    const W = img.naturalWidth, H = img.naturalHeight, kpt = W / SPEC.w;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
@@ -470,26 +486,29 @@
     ctx.textBaseline = 'alphabetic';
 
     for (const f of SPEC.fields) {
-      const i = textField(f.id);
-      if (!i || !i.value) continue;
-      ctx.font = `${parseFloat(getComputedStyle(i).fontSize) * kpx}px Prompt, sans-serif`;
+      const v = values?.text?.[f.id];
+      if (!v) continue;
+      let pt = TEXT_PT;
+      ctx.font = `${pt * kpt}px Prompt, sans-serif`;
+      while (pt > 6 && ctx.measureText(v).width > (f.w - 2) * kpt) { pt -= 0.5; ctx.font = `${pt * kpt}px Prompt, sans-serif`; } // ย่อให้พอดีช่อง
       ctx.textAlign = 'left';
-      ctx.fillText(i.value, (f.x + 1) * kpt, (f.y + f.h - 4.8) * kpt);
+      ctx.fillText(v, (f.x + 1) * kpt, (f.y + f.h - 4.8) * kpt);
     }
     ctx.textAlign = 'center';
     ctx.font = `500 ${DIGIT_PT * kpt}px Prompt, sans-serif`;
     for (const b of SPEC.boxes) {
-      page.querySelectorAll(`.f1050-d[data-row="${b.id}"]`).forEach((i, k) => {
-        if (i.value) ctx.fillText(i.value, (b.xs[k] + b.w / 2) * kpt, (b.y + b.h - 3) * kpt);
-      });
+      const s = String(values?.digits?.[b.id] || '');
+      b.xs.forEach((x, k) => { if (/\d/.test(s[k] || '')) ctx.fillText(s[k], (x + b.w / 2) * kpt, (b.y + b.h - 3) * kpt); });
     }
-    const pi = photoImg();
-    if (hasPhoto() && pi.complete && pi.naturalWidth) ctx.drawImage(pi, PHOTO.x * kpt, PHOTO.y * kpt, PHOTO.w * kpt, PHOTO.h * kpt);
+    if (photoUrl) {
+      try { ctx.drawImage(await loadImg(photoUrl), PHOTO.x * kpt, PHOTO.y * kpt, PHOTO.w * kpt, PHOTO.h * kpt); } catch { /* ไม่มีรูป: ข้าม */ }
+    }
     ctx.lineWidth = 1.7 * kpt;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    const ticks = new Set(values?.ticks || []);
     for (const c of SPEC.circles) {
-      if (page.querySelector(`.f1050-c[data-id="${c.id}"]`)?.getAttribute('aria-pressed') !== 'true') continue;
+      if (!ticks.has(c.id)) continue;
       ctx.beginPath();
       ctx.moveTo((c.x + c.s * 0.2) * kpt, (c.y + c.s * 0.55) * kpt);
       ctx.lineTo((c.x + c.s * 0.43) * kpt, (c.y + c.s * 0.78) * kpt);
@@ -498,6 +517,8 @@
     }
     return new Promise(res => cv.toBlob(res, 'image/png'));
   }
+  window.renderForm1050Png = renderValuesPng;
+  const renderPng = () => renderValuesPng(collect(), photo.url);
 
   // d    = { id (เลขหมายประจำตัว 8 หลัก), name, khet, tambon, moo, date? } ข้อมูลสมาชิกสำหรับกรอกส่วนบนสุด (ไม่บังคับถ้ามี opts.values)
   // opts = { title, meta, hint, values (จาก collect() ถ้ามีจะแสดงค่านี้แทน d), refill (แสดงปุ่มกรอกใหม่จากข้อมูล),

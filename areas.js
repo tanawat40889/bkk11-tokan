@@ -416,6 +416,9 @@ function accessRow(r) {
 // ---------- แบบฟอร์ม 1050 ----------
 // สมาชิกส่งจากหน้าโทกัง (ตาราง form_1050) หลังบ้านเปิดดู แก้ไข อนุมัติ/ไม่อนุมัติ ผ่านฟังก์ชัน form1050_admin_* (ตรวจ is_ymd_rwp_leader())
 const FORM_STATUS = { pending: ['รออนุมัติ', 'warn'], approved: ['อนุมัติแล้ว', 'ok'], rejected: ['ไม่อนุมัติ', 'danger'] };
+let formRows = [];           // แถวล่าสุดที่แสดงในแท็บแบบฟอร์ม
+const formSel = new Set();   // id ของฟอร์มที่ติ๊กเลือกไว้ (ส่งอีเมลรวมครั้งเดียว)
+const selectable = r => r.status !== 'rejected'; // ไม่อนุมัติไปแล้ว ต้องย้ายกลับเป็นรออนุมัติก่อนจึงเลือกได้
 const fmtDateTime = d => new Date(d).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
 
 async function refreshFormBadge() {
@@ -434,7 +437,10 @@ async function renderForms() {
     const rows = await rpc('form1050_admin_list', { p_status: status, p_limit: 200 });
     list.replaceChildren();
     if (!rows.length) list.append(el('p', 'dim', status === 'pending' ? 'ไม่มีแบบฟอร์มที่รออนุมัติ' : 'ไม่มีแบบฟอร์ม'));
+    formRows = rows;
+    for (const id of [...formSel]) if (!rows.some(r => r.id === id && selectable(r))) formSel.delete(id);
     rows.forEach(r => list.append(formRow(r)));
+    updateBulk();
     if (status === 'pending') { $('formCount').textContent = rows.length; $('formCount').hidden = !rows.length; }
     renderPhotoStats();
   } catch (e) {
@@ -466,6 +472,16 @@ function formRow(r) {
   const card = el('div', 'frm');
   const head = el('div', 'acc-head');
   const [label, kind] = FORM_STATUS[r.status] || [r.status, ''];
+  if (selectable(r)) {
+    const pick = el('label', 'frm-pick');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = formSel.has(r.id);
+    cb.setAttribute('aria-label', `เลือก ${r.name_snap || r.mt_co}`);
+    cb.addEventListener('change', () => { if (cb.checked) formSel.add(r.id); else formSel.delete(r.id); updateBulk(); });
+    pick.append(cb);
+    head.append(pick);
+  }
   head.append(el('b', '', r.name_snap || `รหัส ${r.mt_co}`), el('span', `chip-state ${kind}`, label));
   if (r.edited_by_admin) head.append(el('span', 'chip-state', 'แอดมินแก้ไขแล้ว'));
   if (r.photo_path) head.append(el('span', 'chip-state', 'มีรูป'));
@@ -499,11 +515,58 @@ async function callFormMail(body, retried = false) {
   return d;
 }
 
+const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+
+function updateBulk() {
+  const pick = formRows.filter(selectable), sel = pick.filter(r => formSel.has(r.id));
+  $('formBulk').hidden = !pick.length;
+  $('formSelAll').checked = !!pick.length && sel.length === pick.length;
+  const p = sel.filter(r => r.status !== 'approved').length;
+  $('formSelCount').textContent = sel.length ? `เลือก ${sel.length} ฉบับ (รออนุมัติ ${p} · อนุมัติแล้ว ${sel.length - p})` : 'ติ๊กเลือกฟอร์มที่จะส่งอีเมลพร้อมกัน';
+  $('formBulkBtn').disabled = !sel.length;
+}
+
+// ส่งอีเมลเดียวรวมหลายฉบับ: อนุมัติฉบับที่ยังรออยู่ -> วาดรูปฟอร์มแต่ละฉบับ (พร้อมรูปถ่าย) -> ส่งเป็นอีเมลเดียว (ไฟล์รูปถ่ายแนบแยกโดย Edge Function)
+async function bulkSend() {
+  const sel = formRows.filter(r => selectable(r) && formSel.has(r.id));
+  if (!sel.length) return;
+  const pending = sel.filter(r => r.status !== 'approved'), photos = sel.filter(r => r.photo_path).length;
+  if (!confirm(`${pending.length ? `อนุมัติ ${pending.length} ฉบับ และ` : ''}ส่งอีเมลเดียวรวม ${sel.length} ฉบับ\n(แนบรูปฟอร์ม ${sel.length} ไฟล์${photos ? ` + รูปถ่าย ${photos} ไฟล์` : ''})`)) return;
+  const btn = $('formBulkBtn'), msg = $('formBulkMsg');
+  const say = (t, kind) => { msg.hidden = !t; msg.textContent = t || ''; msg.className = `status ${kind || ''}`; };
+  btn.disabled = true;
+  const urls = [];
+  try {
+    for (let i = 0; i < pending.length; i++) {
+      say(`กำลังอนุมัติ ${i + 1}/${pending.length}…`, 'busy');
+      await rpc('form1050_admin_save', { p_id: pending[i].id, p_data: null, p_status: 'approved', p_note: pending[i].admin_note || null, p_photo_path: null, p_clear_photo: false });
+    }
+    const items = [];
+    for (let i = 0; i < sel.length; i++) {
+      say(`กำลังสร้างรูปฟอร์ม ${i + 1}/${sel.length}…`, 'busy');
+      const r = sel[i];
+      let url = null;
+      if (r.photo_path) {
+        try { url = await photoLoad(r.photo_path); urls.push(url); } catch { throw new Error(`โหลดรูปถ่ายของ ${r.name_snap || r.mt_co} ไม่สำเร็จ`); }
+      }
+      items.push({ id: r.id, png: await blobToB64(await renderForm1050Png(r.data, url)) });
+    }
+    say('กำลังส่งอีเมล…', 'busy');
+    const d = await callFormMail({ items });
+    formSel.clear();
+    say(`ส่งอีเมลเดียวรวม ${d.count} ฉบับ${d.photos ? ` (มีรูปถ่าย ${d.photos} รูป)` : ''} ไปที่ ${d.to} แล้ว ✅`, 'ok');
+  } catch (e) {
+    say(`ไม่สำเร็จ: ${e.message}${pending.length ? ' (ฉบับที่อนุมัติไปแล้วยังคงอนุมัติอยู่ เลือกซ้ำแล้วกดส่งอีกครั้งได้)' : ''}`, 'err');
+  } finally {
+    urls.forEach(u => URL.revokeObjectURL(u));
+    await renderForms();
+  }
+}
+
 async function emailFormPng(id, extra) {
   const blob = await extra.renderPng();
   if (!blob) throw new Error('สร้างรูปแบบฟอร์มไม่สำเร็จ');
-  const png = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
-  return callFormMail({ id, png });
+  return callFormMail({ id, png: await blobToB64(blob) });
 }
 
 async function openFormRow(r) {
@@ -624,7 +687,13 @@ function initUi() {
     renderTree();
   });
   $('accessForm').addEventListener('submit', e => { e.preventDefault(); renderAccess(); });
-  $('formStatus').addEventListener('change', renderForms);
+  $('formStatus').addEventListener('change', () => { formSel.clear(); renderForms(); });
+  $('formSelAll').addEventListener('change', e => {
+    formRows.filter(selectable).forEach(r => (e.target.checked ? formSel.add(r.id) : formSel.delete(r.id)));
+    document.querySelectorAll('.frm-pick input').forEach(c => { c.checked = e.target.checked; });
+    updateBulk();
+  });
+  $('formBulkBtn').addEventListener('click', bulkSend);
   $('formReload').addEventListener('click', renderForms);
   $('sheetClose').addEventListener('click', () => $('sheet').close());
   // แตะนอกแผงเพื่อปิด

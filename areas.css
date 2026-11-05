@@ -159,3 +159,11 @@
 @media (min-width: 1280px) {
   .areas { max-width: 1320px; }
 }
+
+/* ---------- เลือกหลายฉบับ ส่งอีเมลเดียว ---------- */
+.bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 10px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.bulk-all { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.bulk input[type="checkbox"], .frm-pick input { width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer; }
+.bulk .dim { flex: 1; min-width: 160px; margin: 0; }
+.frm-pick { display: inline-flex; align-items: center; padding: 10px 10px 10px 0; margin: -10px 0; cursor: pointer; }
+#formBulkMsg { margin: 0 0 12px; border-radius: 8px; }
