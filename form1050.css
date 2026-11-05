@@ -119,3 +119,22 @@ dialog#formModal::backdrop { background: rgba(15, 18, 26, 0.6); }
 }
 .f1050-photo-pick:hover { background: rgba(250, 204, 21, 0.18); }
 .f1050-photo.has-photo .f1050-photo-pick span { display: none; }
+
+/* ตัวปรับตำแหน่ง/ขนาดรูป: ลากเพื่อเลื่อน เลื่อนแถบ/หยิกนิ้ว/ล้อเมาส์เพื่อซูม (อยู่นอกหน้ากระดาษที่ถูกย่อ จึงใช้งานง่ายบนมือถือ) */
+.f1050-crop { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.7); }
+.f1050-crop[hidden] { display: none; }
+.f1050-crop-card { width: min(100%, 360px); padding: 14px; border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
+.f1050-crop-title { margin: 0 0 10px; font-size: 0.85rem; color: var(--text-dim); }
+.f1050-crop-view {
+  position: relative; width: min(78vw, 300px); aspect-ratio: 360 / 418; margin: 0 auto; overflow: hidden;
+  background: #000; border-radius: 6px; cursor: grab; touch-action: none; user-select: none;
+}
+.f1050-crop-view:active { cursor: grabbing; }
+.f1050-crop-img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; -webkit-user-drag: none; }
+.f1050-crop-zoom { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; font-size: 0.9rem; }
+.f1050-crop-zoom input { flex: 1; min-width: 0; min-height: 32px; }
+.f1050-crop-zoom output { min-width: 3.2em; text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.f1050-crop-actions { display: flex; gap: 8px; margin-top: 12px; }
+.f1050-crop-actions button { flex: 1; min-height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.95rem; cursor: pointer; }
+.f1050-crop-actions button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.f1050-crop-actions button:disabled { opacity: 0.5; }

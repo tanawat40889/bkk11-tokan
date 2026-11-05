@@ -128,7 +128,7 @@
     });
     ro.observe(scroller);
 
-    const reset = () => { clearAll(); current = null; };
+    const reset = () => { if (crop.el) { crop.el.hidden = true; if (crop.prevSrc) URL.revokeObjectURL(crop.prevSrc.url); crop.prevSrc = null; } clearAll(); current = null; };
     dlg.addEventListener('close', reset); // ปิดด้วย Esc หรือปุ่มปิด
   }
 
@@ -151,54 +151,185 @@
     photoImg().removeAttribute('src');
     photoBox.classList.remove('has-photo');
     photo = { blob: null, url: null, existing: false, removed: !!markRemoved && hadServer };
+    if (!markRemoved) discardSource();
     updatePhotoButtons();
   }
 
-  // ย่อรูปในเครื่อง: ตัดกึ่งกลางให้ได้สัดส่วนช่อง แล้วบีบ JPEG จนไม่เกิน ~70KB (ปกติราว 30-50KB)
-  async function compressPhoto(file) {
-    if (!/^image\//.test(file.type)) throw new Error('ไฟล์ที่เลือกไม่ใช่รูปภาพ');
-    const src = URL.createObjectURL(file);
-    try {
-      const img = new Image();
-      img.src = src;
-      await img.decode().catch(() => { throw new Error('เปิดรูปนี้ไม่ได้ ลองเลือกรูปอื่น (JPG หรือ PNG)'); });
-      const r = PHOTO_W / PHOTO_H;
-      let sw = img.naturalWidth, sh = img.naturalHeight;
-      if (sw / sh > r) sw = sh * r; else sh = sw / r;
-      const cv = document.createElement('canvas');
-      cv.width = PHOTO_W; cv.height = PHOTO_H;
-      const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, PHOTO_W, PHOTO_H);
-      ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, PHOTO_W, PHOTO_H);
-      let blob = null;
-      for (const q of [0.82, 0.72, 0.62, 0.5, 0.4]) {
-        blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', q));
-        if (blob && blob.size <= PHOTO_MAX_BYTES) break;
+  // ---------- ปรับตำแหน่ง/ขนาดรูปก่อนส่ง ----------
+  // รูปต้นฉบับอยู่ในหน่วยความจำจนกว่าจะปิดฟอร์ม (photoSrc) เพื่อให้กลับมาปรับได้อีก; ส่งขึ้นเซิร์ฟเวอร์เฉพาะรูปที่ตัดและย่อแล้ว
+  let photoSrc = null;   // { url, img, z, tx, ty }  z = ซูม (1 = พอดีช่องแบบ cover), tx/ty = ตำแหน่งรูปในกรอบตัด (px)
+  const crop = { el: null, view: null, img: null, zoom: null, label: null, mode: 'new', prevSrc: null, vw: 0, vh: 0, z: 1, tx: 0, ty: 0, base: 1, pointers: new Map(), last: null };
+  const MAX_ZOOM = 4;
+
+  function buildCropper() {
+    const el = document.createElement('div');
+    el.className = 'f1050-crop';
+    el.hidden = true;
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', 'ปรับรูปถ่าย');
+    el.innerHTML = `
+      <div class="f1050-crop-card">
+        <p class="f1050-crop-title">ลากรูปเพื่อเลื่อนตำแหน่ง · เลื่อนแถบ (หรือหยิกนิ้ว) เพื่อปรับขนาด</p>
+        <div class="f1050-crop-view"><img class="f1050-crop-img" alt="" draggable="false"></div>
+        <label class="f1050-crop-zoom"><span>ขนาด</span><input type="range" min="1" max="${MAX_ZOOM}" step="0.01" value="1" aria-label="ขนาดรูป"><output>100%</output></label>
+        <div class="f1050-crop-actions">
+          <button type="button" data-crop="cancel">ยกเลิก</button>
+          <button type="button" data-crop="ok" class="primary">ใช้รูปนี้</button>
+        </div>
+      </div>`;
+    dlg.append(el);
+    Object.assign(crop, { el, view: el.querySelector('.f1050-crop-view'), img: el.querySelector('.f1050-crop-img'),
+      zoom: el.querySelector('input[type=range]'), label: el.querySelector('output') });
+    el.querySelector('[data-crop=cancel]').addEventListener('click', closeCropper);
+    el.querySelector('[data-crop=ok]').addEventListener('click', applyCrop);
+    crop.zoom.addEventListener('input', () => setZoom(Number(crop.zoom.value), crop.vw / 2, crop.vh / 2));
+
+    const v = crop.view;
+    v.addEventListener('pointerdown', e => { try { v.setPointerCapture(e.pointerId); } catch { /* ไม่รองรับ: ลากต่อได้ตราบที่ยังอยู่ในกรอบ */ } crop.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); crop.last = null; });
+    v.addEventListener('pointermove', e => {
+      const p = crop.pointers.get(e.pointerId);
+      if (!p) return;
+      const prev = [...crop.pointers.values()].map(q => ({ ...q }));
+      p.x = e.clientX; p.y = e.clientY;
+      const cur = [...crop.pointers.values()];
+      if (cur.length >= 2) {            // หยิกนิ้ว: ซูมรอบจุดกึ่งกลางสองนิ้ว + เลื่อนตามไปด้วย
+        const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        const r = v.getBoundingClientRect();
+        const mx = (cur[0].x + cur[1].x) / 2 - r.left, my = (cur[0].y + cur[1].y) / 2 - r.top;
+        const pmx = (prev[0].x + prev[1].x) / 2 - r.left, pmy = (prev[0].y + prev[1].y) / 2 - r.top;
+        crop.tx += mx - pmx; crop.ty += my - pmy;
+        const d0 = dist(prev[0], prev[1]);
+        if (d0 > 0) setZoom(crop.z * dist(cur[0], cur[1]) / d0, mx, my);
+        else paintCrop();
+      } else {                           // นิ้วเดียว/เมาส์: ลากเลื่อน
+        const q = prev[0];
+        crop.tx += p.x - q.x; crop.ty += p.y - q.y;
+        paintCrop();
       }
-      if (!blob) throw new Error('ย่อรูปไม่สำเร็จ');
-      return blob;
-    } finally { URL.revokeObjectURL(src); }
+    });
+    const up = e => { crop.pointers.delete(e.pointerId); };
+    v.addEventListener('pointerup', up);
+    v.addEventListener('pointercancel', up);
+    v.addEventListener('wheel', e => {
+      e.preventDefault();
+      const r = v.getBoundingClientRect();
+      setZoom(crop.z * Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
+  }
+
+  // วาดรูปในกรอบตัดตาม z/tx/ty โดยบังคับให้รูปคลุมกรอบเต็มเสมอ (ไม่มีขอบว่าง)
+  function paintCrop() {
+    const sc = crop.base * crop.z, w = photoSrc.img.naturalWidth * sc, h = photoSrc.img.naturalHeight * sc;
+    crop.tx = Math.min(0, Math.max(crop.vw - w, crop.tx));
+    crop.ty = Math.min(0, Math.max(crop.vh - h, crop.ty));
+    Object.assign(crop.img.style, { width: `${w}px`, height: `${h}px`, transform: `translate(${crop.tx}px, ${crop.ty}px)` });
+    crop.zoom.value = String(crop.z);
+    crop.label.textContent = `${Math.round(crop.z * 100)}%`;
+  }
+
+  // ซูมโดยให้จุด (cx, cy) ในกรอบอยู่ที่เดิม
+  function setZoom(z, cx, cy) {
+    z = Math.min(MAX_ZOOM, Math.max(1, z));
+    const oldSc = crop.base * crop.z, newSc = crop.base * z;
+    crop.tx = cx - (cx - crop.tx) / oldSc * newSc;
+    crop.ty = cy - (cy - crop.ty) / oldSc * newSc;
+    crop.z = z;
+    paintCrop();
+  }
+
+  function openCropper(mode) {
+    if (!crop.el) buildCropper();
+    crop.mode = mode;
+    crop.pointers.clear();
+    crop.img.src = photoSrc.url;
+    crop.el.hidden = false;
+    const r = crop.view.getBoundingClientRect();
+    crop.vw = r.width; crop.vh = r.height;
+    crop.base = Math.max(crop.vw / photoSrc.img.naturalWidth, crop.vh / photoSrc.img.naturalHeight);
+    // tx/ty เก็บเป็นสัดส่วนของกรอบ เพื่อให้เปิดซ้ำแล้วตำแหน่งเดิมไม่เพี้ยนแม้ขนาดจอเปลี่ยน
+    crop.z = photoSrc.z;
+    crop.tx = photoSrc.tx == null ? (crop.vw - photoSrc.img.naturalWidth * crop.base * crop.z) / 2 : photoSrc.tx * crop.vw;
+    crop.ty = photoSrc.ty == null ? (crop.vh - photoSrc.img.naturalHeight * crop.base * crop.z) / 2 : photoSrc.ty * crop.vh;
+    paintCrop();
+    crop.el.querySelector('[data-crop=ok]').focus();
+  }
+
+  function closeCropper() {
+    crop.el.hidden = true;
+    crop.img.removeAttribute('src');
+    if (crop.mode === 'new') {                // ยกเลิกตอนเพิ่งเลือกไฟล์: ทิ้งไฟล์ใหม่ แล้วกลับไปใช้รูปเดิม (ถ้ามี)
+      URL.revokeObjectURL(photoSrc.url);
+      photoSrc = crop.prevSrc;
+      crop.prevSrc = null;
+      updatePhotoButtons();
+    }
+  }
+
+  function discardSource() {
+    if (photoSrc) URL.revokeObjectURL(photoSrc.url);
+    photoSrc = null;
+    updatePhotoButtons();
+  }
+
+  // ตัดตามกรอบเป็น 360x418 แล้วบีบ JPEG จนไม่เกิน ~70KB (ปกติราว 30-50KB)
+  async function renderCrop() {
+    const img = photoSrc.img, sc = crop.base * crop.z;
+    const cv = document.createElement('canvas');
+    cv.width = PHOTO_W; cv.height = PHOTO_H;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, PHOTO_W, PHOTO_H);
+    ctx.drawImage(img, -crop.tx / sc, -crop.ty / sc, crop.vw / sc, crop.vh / sc, 0, 0, PHOTO_W, PHOTO_H);
+    let blob = null;
+    for (const q of [0.82, 0.72, 0.62, 0.5, 0.4]) {
+      blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', q));
+      if (blob && blob.size <= PHOTO_MAX_BYTES) break;
+    }
+    if (!blob) throw new Error('ย่อรูปไม่สำเร็จ');
+    return blob;
+  }
+
+  async function applyCrop() {
+    const okBtn = crop.el.querySelector('[data-crop=ok]');
+    okBtn.disabled = true;
+    try {
+      const blob = await renderCrop();
+      if (crop.mode === 'new' && crop.prevSrc) { URL.revokeObjectURL(crop.prevSrc.url); crop.prevSrc = null; }
+      photoSrc.z = crop.z;
+      photoSrc.tx = crop.tx / crop.vw;
+      photoSrc.ty = crop.ty / crop.vh;
+      if (photo.url) URL.revokeObjectURL(photo.url);
+      photo = { blob, url: URL.createObjectURL(blob), existing: photo.existing, removed: false };
+      showPhoto(photo.url);
+      updatePhotoButtons();
+      crop.el.hidden = true;
+      crop.img.removeAttribute('src');
+      setStatus(`ใส่รูปแล้ว (ย่อเหลือ ${Math.max(1, Math.round(blob.size / 1024))} KB)`, 'ok');
+    } catch (e) { setStatus(e.message || 'ใส่รูปไม่สำเร็จ', 'err'); }
+    finally { okBtn.disabled = false; }
   }
 
   async function onPickPhoto() {
     const f = fileInput.files[0];
     fileInput.value = '';
     if (!f) return;
-    setStatus('กำลังย่อรูป…', 'busy');
-    try {
-      const blob = await compressPhoto(f);
-      if (photo.url) URL.revokeObjectURL(photo.url);
-      photo = { blob, url: URL.createObjectURL(blob), existing: photo.existing, removed: false };
-      showPhoto(photo.url);
-      updatePhotoButtons();
-      setStatus(`ใส่รูปแล้ว (ย่อเหลือ ${Math.max(1, Math.round(blob.size / 1024))} KB)`, 'ok');
-    } catch (e) { setStatus(e.message || 'ใส่รูปไม่สำเร็จ', 'err'); }
+    if (!/^image\//.test(f.type)) { setStatus('ไฟล์ที่เลือกไม่ใช่รูปภาพ', 'err'); return; }
+    setStatus('กำลังเปิดรูป…', 'busy');
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.src = url;
+    try { await img.decode(); } catch { URL.revokeObjectURL(url); setStatus('เปิดรูปนี้ไม่ได้ ลองเลือกรูปอื่น (JPG หรือ PNG)', 'err'); return; }
+    crop.prevSrc = photoSrc;  // เก็บรูปเดิมไว้ก่อน เผื่อกดยกเลิก
+    photoSrc = { url, img, z: 1, tx: null, ty: null };
+    setStatus('', '');
+    openCropper('new');
   }
 
   function updatePhotoButtons() {
     const del = dlg?.querySelector('[data-photo-del]');
     if (del) del.hidden = !hasPhoto();
+    const adj = dlg?.querySelector('[data-photo-adjust]');
+    if (adj) adj.hidden = !photoSrc || !hasPhoto();
   }
 
   const photoExtra = () => ({ photoBlob: photo.blob, photoRemoved: photo.removed && !photo.blob });
@@ -298,7 +429,10 @@
     if (current.opts.refill && current.d) add('กรอกใหม่จากข้อมูล', '', () => { fillFromMember(current.d); requestAnimationFrame(fitAll); });
     if (current.opts.photoEditable !== false) {
       add('📷 เพิ่ม/เปลี่ยนรูป', '', () => fileInput.click());
-      const del = add('ลบรูป', '', () => { resetPhoto(true); setStatus('เอารูปออกแล้ว', 'ok'); });
+      const adj = add('ปรับตำแหน่ง/ขนาดรูป', '', () => openCropper('adjust'));
+      adj.dataset.photoAdjust = '1';
+      adj.hidden = !photoSrc || !hasPhoto();
+      const del = add('ลบรูป', '', () => { resetPhoto(true); discardSource(); setStatus('เอารูปออกแล้ว', 'ok'); });
       del.dataset.photoDel = '1';
       del.hidden = !hasPhoto();
     }
