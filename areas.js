@@ -471,12 +471,39 @@ function formRow(r) {
   if (r.photo_path) head.append(el('span', 'chip-state', 'มีรูป'));
   card.append(head, el('p', 'dim', `รหัส ${r.mt_co} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}`));
   if (r.reviewed_at) card.append(el('p', 'dim', `${label}เมื่อ ${fmtDateTime(r.reviewed_at)}${r.reviewer_name ? ' โดย ' + r.reviewer_name : ''}`));
+  if (r.emailed_at) card.append(el('p', 'dim', `ส่งอีเมลแล้วเมื่อ ${fmtDateTime(r.emailed_at)} ถึง ${r.emailed_to}`));
   if (r.admin_note) card.append(el('p', 'frm-note', `หมายเหตุ: ${r.admin_note}`));
   const b = el('button', 'btn-outline', 'เปิด / แก้ไข');
   b.type = 'button';
   b.addEventListener('click', () => openFormRow(r));
   card.append(b);
   return card;
+}
+
+// ส่งอีเมลแบบ 1050 (แนบรูป PNG ของฟอร์มที่กำลังเปิดอยู่) ผ่าน Edge Function form1050-mail: เฉพาะแอดมิน และต้องอนุมัติแล้วเท่านั้น
+async function callFormMail(body, retried = false) {
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/functions/v1/form1050-mail`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch { throw new Error('เชื่อมต่อไม่ได้'); }
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(session).catch(() => null);
+    if (next) { session = next; saveSession(next); return callFormMail(body, true); }
+  }
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || d.message || `ส่งอีเมลไม่สำเร็จ (${res.status})`);
+  return d;
+}
+
+async function emailFormPng(id, extra) {
+  const blob = await extra.renderPng();
+  if (!blob) throw new Error('สร้างรูปแบบฟอร์มไม่สำเร็จ');
+  const png = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+  return callFormMail({ id, png });
 }
 
 async function openFormRow(r) {
@@ -500,19 +527,35 @@ async function openFormRow(r) {
     await renderForms();
     refreshFormBadge();
   };
-  const actions = [
-    { label: 'บันทึกการแก้ไข', run: async (v, x) => { await save(v, x, null, null); return 'บันทึกการแก้ไขแล้ว ✅'; } },
-    { label: 'อนุมัติ', kind: 'primary', close: true, run: async (v, x) => { await save(v, x, 'approved', r.admin_note || null); return 'อนุมัติแล้ว ✅'; } },
-    {
-      label: 'ไม่อนุมัติ', kind: 'danger', close: true,
-      run: async (v, x) => {
-        const note = prompt('เหตุผลที่ไม่อนุมัติ (ใส่หรือไม่ใส่ก็ได้)', r.admin_note || '');
-        if (note === null) throw new Error('ยกเลิก ยังไม่ได้เปลี่ยนสถานะ');
-        await save(v, x, 'rejected', note);
-        return 'บันทึกว่าไม่อนุมัติแล้ว';
-      },
+  // อนุมัติ = บันทึกการแก้ไข + สถานะ approved + ส่งอีเมล; อนุมัติแล้วส่งอีเมลล้มเหลวจะไม่ย้อนการอนุมัติ (แจ้งให้กดส่งใหม่)
+  const approveAndMail = async (v, x) => {
+    await save(v, x, 'approved', r.admin_note || null);
+    try {
+      const d = await emailFormPng(r.id, x);
+      await renderForms();
+      return `อนุมัติแล้ว ✅ ส่งอีเมลไปที่ ${d.to} แล้ว`;
+    } catch (e) {
+      throw new Error(`อนุมัติแล้ว ✅ แต่ส่งอีเมลไม่สำเร็จ: ${e.message} (แก้ปัญหาแล้วกดปุ่มส่งอีเมลอีกครั้ง)`);
+    }
+  };
+  const actions = [{ label: 'บันทึกการแก้ไข', run: async (v, x) => { await save(v, x, null, null); return 'บันทึกการแก้ไขแล้ว ✅'; } }];
+  if (r.status === 'approved') {
+    actions.push({
+      label: 'ส่งอีเมลอีกครั้ง', kind: 'primary', confirm: 'ส่งอีเมลฟอร์มนี้อีกครั้ง? (จะบันทึกการแก้ไขที่ทำไว้ก่อน)',
+      run: async (v, x) => { await save(v, x, null, null); const d = await emailFormPng(r.id, x); await renderForms(); return `ส่งอีเมลไปที่ ${d.to} แล้ว ✅`; },
+    });
+  } else {
+    actions.push({ label: 'อนุมัติ + ส่งอีเมล', kind: 'primary', close: true, confirm: 'อนุมัติแบบฟอร์มนี้ และส่งอีเมลพร้อมไฟล์แนบ?', run: approveAndMail });
+  }
+  actions.push({
+    label: 'ไม่อนุมัติ', kind: 'danger', close: true,
+    run: async (v, x) => {
+      const note = prompt('เหตุผลที่ไม่อนุมัติ (ใส่หรือไม่ใส่ก็ได้)', r.admin_note || '');
+      if (note === null) throw new Error('ยกเลิก ยังไม่ได้เปลี่ยนสถานะ');
+      await save(v, x, 'rejected', note);
+      return 'บันทึกว่าไม่อนุมัติแล้ว';
     },
-  ];
+  });
   if (r.status !== 'pending') actions.push({ label: 'ย้ายกลับเป็นรออนุมัติ', run: async (v, x) => { await save(v, x, 'pending', null); return 'ย้ายกลับเป็นรออนุมัติแล้ว'; } });
   actions.push({
     label: 'ลบ', kind: 'danger', close: true, confirm: `ลบแบบฟอร์มของ ${r.name_snap || r.mt_co} ถาวร? (รวมรูป กู้คืนไม่ได้)`,
@@ -528,7 +571,7 @@ async function openFormRow(r) {
   openForm1050(null, {
     title: `แบบ 1050 · ${r.name_snap || r.mt_co}`,
     meta: `สถานะ: ${label} · ส่งเมื่อ ${fmtDateTime(r.submitted_at)} โดย ${r.submitter_name || 'บัญชี staff'}${r.admin_note ? ' · หมายเหตุ: ' + r.admin_note : ''}${photoNote}`,
-    hint: 'แก้ไขได้ทุกช่อง รวมถึงเพิ่ม/เปลี่ยน/ลบรูป กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ" เพื่อเก็บการแก้ไขและอนุมัติพร้อมกัน',
+    hint: 'แก้ไขได้ทุกช่อง รวมถึงเพิ่ม/เปลี่ยน/ลบรูป กด "บันทึกการแก้ไข" เพื่อเก็บไว้ หรือกด "อนุมัติ + ส่งอีเมล" เพื่อเก็บการแก้ไข อนุมัติ และส่งอีเมลพร้อมรูปฟอร์มที่แก้แล้ว',
     values: r.data,
     photoUrl,
     fileName: `1050-${r.mt_co}`,

@@ -332,7 +332,7 @@
     if (adj) adj.hidden = !photoSrc || !hasPhoto();
   }
 
-  const photoExtra = () => ({ photoBlob: photo.blob, photoRemoved: photo.removed && !photo.blob });
+  const photoExtra = () => ({ photoBlob: photo.blob, photoRemoved: photo.removed && !photo.blob, renderPng });
 
   const rowInputs = t => [...page.querySelectorAll(`.f1050-d[data-row="${t.dataset.row}"]`)];
   const textField = id => page.querySelector(`.f1050-t[data-id="${id}"]`);
@@ -442,6 +442,19 @@
   }
 
   async function savePng() {
+    const blob = await renderPng();
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${current?.opts.fileName || '1050'}.png`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
+
+  // วาดฟอร์มที่กรอกแล้ว (ข้อความ เลขหลัก ติ๊ก รูปถ่าย) ลงบนภาพฟอร์มเปล่า -> Blob PNG (ใช้ทั้งบันทึกเป็นรูปและแนบอีเมล)
+  async function renderPng() {
     const img = page.querySelector('img');
     // รอรูปกับฟอนต์ แต่ไม่รอนานเกิน 2 วินาที (ถ้าฟอนต์ไม่มา ใช้ฟอนต์สำรอง)
     const wait = p => Promise.race([p.catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
@@ -483,22 +496,13 @@
       ctx.lineTo((c.x + c.s * 0.82) * kpt, (c.y + c.s * 0.2) * kpt);
       ctx.stroke();
     }
-    cv.toBlob(blob => {
-      if (!blob) return;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${current?.opts.fileName || '1050'}.png`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    }, 'image/png');
+    return new Promise(res => cv.toBlob(res, 'image/png'));
   }
 
   // d    = { id (เลขหมายประจำตัว 8 หลัก), name, khet, tambon, moo, date? } ข้อมูลสมาชิกสำหรับกรอกส่วนบนสุด (ไม่บังคับถ้ามี opts.values)
   // opts = { title, meta, hint, values (จาก collect() ถ้ามีจะแสดงค่านี้แทน d), refill (แสดงปุ่มกรอกใหม่จากข้อมูล),
   //          photoUrl (blob: URL ของรูปเดิม ฟอร์มจะ revoke ให้เมื่อปิด), photoEditable (ค่าเริ่มต้น true),
-  //          fileName, actions: [{ label, kind: 'primary'|'danger', run: async (values, { photoBlob, photoRemoved }) => ข้อความสำเร็จ, close, confirm }] }
+  //          fileName, actions: [{ label, kind: 'primary'|'danger', run: async (values, { photoBlob, photoRemoved, renderPng }) => ข้อความสำเร็จ, close, confirm }] }
   //          photoBlob = รูปใหม่ที่ย่อแล้ว (JPEG ~40KB) หรือ null, photoRemoved = ผู้ใช้เอารูปเดิมออก
   window.openForm1050 = function (d, opts = {}) {
     if (!dlg) build();
