@@ -6,7 +6,7 @@
   const OUT_W = 420, OUT_H = 150;      // ขนาดสูงสุดของ PNG ที่เก็บ
   const MAX_CHARS = 45000;             // data URL สูงสุด (ตารางจำกัด 60000)
   const INK = [10, 42, 110];           // #0a2a6e เหมือนหมึกในฟอร์ม
-  let dlg = null, cv = null, ctx = null, codeInput = null, msg = null, btns = {}, state = null;
+  let codeLabel = null, titleEl = null, noteEl = null, dlg = null, cv = null, ctx = null, codeInput = null, msg = null, btns = {}, state = null;
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
   const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('เปิดรูปไม่ได้')); i.src = src; });
@@ -15,8 +15,10 @@
     dlg = el('dialog', 'sig-dlg');
     dlg.setAttribute('aria-label', 'ลายเซ็นของฉัน');
     const form = el('div', 'sig-body');
-    form.append(el('h2', 'sig-title', 'ลายเซ็นของฉัน'));
-    form.append(el('p', 'sig-note', 'วาดลายเซ็นในกรอบ หรืออัปโหลดรูปลายเซ็น (ถ่ายบนกระดาษขาว) เก็บไว้เห็นเฉพาะคุณ ใช้ใส่ช่องลงชื่อในแบบ 1050 ให้อัตโนมัติ'));
+    titleEl = el('h2', 'sig-title', 'ลายเซ็นของฉัน');
+    form.append(titleEl);
+    noteEl = el('p', 'sig-note');
+    form.append(noteEl);
     const wrap = el('div', 'sig-pad');
     cv = document.createElement('canvas');
     cv.width = CW; cv.height = CH;
@@ -33,6 +35,7 @@
     form.append(row);
 
     const lab = el('label', 'sig-code');
+    codeLabel = lab;
     lab.append(el('span', '', 'รหัส 8 หลักของฉัน (เลขหมายประจำตัว)'));
     codeInput = document.createElement('input');
     codeInput.type = 'text'; codeInput.inputMode = 'numeric'; codeInput.maxLength = 8; codeInput.autocomplete = 'off';
@@ -90,9 +93,18 @@
       finally { URL.revokeObjectURL(url); }
     });
     btns.close.addEventListener('click', () => dlg.close());
-    dlg.addEventListener('close', () => { const s = state; state = null; if (s) s.done(s.result || null); });
+    dlg.addEventListener('close', () => { if (!dlg.open) finish(); });
     btns.save.addEventListener('click', onSave);
     btns.remove.addEventListener('click', onRemove);
+  }
+
+  // ปิดหน้าต่างและส่งผลกลับให้ผู้เรียกทันที (ไม่รอ event close; ปิดด้วย Esc/ปุ่มปิดก็เข้าทางนี้ผ่าน event)
+  function finish() {
+    const s = state;
+    if (!s) return;
+    state = null;
+    s.done(s.result || null);
+    if (dlg.open) dlg.close();
   }
 
   function say(text, err) { msg.hidden = !text; msg.textContent = text || ''; msg.className = `sig-msg${err ? ' err' : ''}`; }
@@ -152,15 +164,15 @@
 
   async function onSave() {
     const code = codeInput.value;
-    if (!/^\d{8}$/.test(code)) { say('กรอกรหัสให้ครบ 8 หลัก', true); codeInput.focus(); return; }
+    if (!state.oneOff && !/^\d{8}$/.test(code)) { say('กรอกรหัสให้ครบ 8 หลัก', true); codeInput.focus(); return; }
     const png = exportPng();
     if (!png) { say('ยังไม่มีลายเซ็นในกรอบ (หรือไฟล์ใหญ่เกินไป)', true); return; }
     busy(true); say('กำลังบันทึก…');
     try {
-      await state.save({ png, code });
+      if (state.save) await state.save({ png, code });
       state.result = { png, code };
-      say('บันทึกแล้ว ✅');
-      setTimeout(() => { if (dlg.open) dlg.close(); }, 700);
+      say(state.oneOff ? '' : 'บันทึกแล้ว ✅');
+      if (state.oneOff) finish(); else { const st = state; setTimeout(() => { if (state === st) finish(); }, 700); }
     } catch (e) { say(e.message || 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง', true); busy(false); }
   }
 
@@ -170,7 +182,7 @@
     try {
       await state.remove();
       state.result = { removed: true };
-      if (dlg.open) dlg.close();
+      finish();
     } catch (e) { say(e.message || 'ลบไม่สำเร็จ ลองใหม่อีกครั้ง', true); busy(false); }
   }
 
@@ -183,7 +195,12 @@
     say('');
     ctx.clearRect(0, 0, CW, CH);
     codeInput.value = String(opts.code || opts.defaultCode || '').replace(/\D/g, '').slice(0, 8);
-    btns.remove.hidden = !opts.png;
+    const one = !!opts.oneOff;
+    titleEl.textContent = opts.title || 'ลายเซ็นของฉัน';
+    noteEl.textContent = one ? 'ให้เจ้าของข้อมูลวาดลายเซ็นในกรอบ (หรืออัปโหลดรูป) ใช้กับฟอร์มนี้ฟอร์มเดียว ไม่ถูกเก็บไว้' : 'วาดลายเซ็นในกรอบ หรืออัปโหลดรูปลายเซ็น (ถ่ายบนกระดาษขาว) เก็บไว้เห็นเฉพาะคุณ ใช้ใส่ช่องลงชื่อในแบบ 1050 ให้อัตโนมัติ';
+    codeLabel.hidden = one;
+    btns.save.textContent = one ? 'ใช้ลายเซ็นนี้' : 'บันทึก';
+    btns.remove.hidden = one || !opts.png;
     dlg.showModal();
     if (opts.png) {
       loadImg(opts.png).then(img => {

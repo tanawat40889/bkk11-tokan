@@ -197,3 +197,4 @@ dialog.sig-dlg::backdrop { background: rgba(15, 18, 26, 0.6); }
 .sig-msg { margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 0.88rem; background: var(--note-bg); color: var(--note-fg); }
 .sig-msg.err { background: var(--danger-bg); color: var(--danger); }
 .sig-msg[hidden] { display: none; }
+.sig-code[hidden] { display: none; }

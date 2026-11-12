@@ -34,7 +34,7 @@
   const sizeCss = pt => `calc(${pt} * var(--pt))`;
 
   let dlg = null, page = null, fitBox = null, scroller = null, ro = null, fileInput = null, photoBox = null;
-  let sig = { png: null, placed: new Set() }; // ลายเซ็นที่วางในฟอร์ม (data URL PNG) + ช่องที่วางอยู่ ('L' | 'R')
+  let sig = {};                                 // ลายเซ็นที่วางในฟอร์ม: { L: dataURL, R: dataURL } (ช่องที่ไม่มี key = ว่าง)
   let sigEls = {};                              // id -> { box, img, btn }
   let photo = { blob: null, url: null, existing: false, removed: false }; // existing = รูปที่โหลดมาจากหลังบ้าน
   let current = null;     // { d, opts }
@@ -187,39 +187,44 @@
 
   // ---------- ลายเซ็น ----------
   const mySig = () => current?.opts?.mySig || null;                 // { png|null, code, self } ของผู้ใช้ที่ล็อกอิน (self = เลขหมายประจำตัวจริง 8 หลัก) (ไม่มี = ไม่ให้เซ็น)
-  const sigPng = () => sig.png || mySig()?.png || null;
-  const sigAllowed = sg => !!mySig() && (sg.id === 'R' || mySig().self === current.d?.id); // ช่องผู้ยื่น (L) ให้เซ็นเฉพาะตอนสมาชิกในฟอร์มคือตัวเอง
+  const isMe = () => !!mySig() && mySig().self === current.d?.id; // สมาชิกในฟอร์มคือผู้ใช้ที่ล็อกอิน
+  // R (หัวหน้ารับรอง) = ลายเซ็นที่เก็บไว้ของผู้ใช้; L (ผู้ยื่น/เจ้าของข้อมูล) = ใครก็เซ็นได้: ถ้าเป็นตัวเองใช้ลายเซ็นที่เก็บไว้ ถ้าเป็นคนอื่นให้เจ้าตัววาดเซ็นบนหน้าจอ (ใช้กับฟอร์มนี้ฟอร์มเดียว ไม่บันทึก)
+  const sigAllowed = sg => sg.id === 'L' || !!mySig();
   function refreshSigs() {
     for (const sg of FORMS[type]?.sigs || []) {
       const e = sigEls[sg.id];
       if (!e) continue;
-      const on = sig.placed.has(sg.id);
+      const on = !!sig[sg.id];
       e.img.hidden = !on;
-      if (on) e.img.src = sig.png; else e.img.removeAttribute('src');
+      if (on) e.img.src = sig[sg.id]; else e.img.removeAttribute('src');
       e.btn.hidden = !(on || sigAllowed(sg));
       e.btn.textContent = on ? '× ลบ' : '+ เซ็น';
-      e.btn.setAttribute('aria-label', on ? 'เอาลายเซ็นออก' : 'ใส่ลายเซ็นของฉัน');
+      e.btn.setAttribute('aria-label', on ? 'เอาลายเซ็นออก' : sg.id === 'L' ? 'ให้เจ้าของข้อมูลเซ็น' : 'ใส่ลายเซ็นของฉัน');
     }
   }
-  function resetSigs() { sig = { png: null, placed: new Set() }; refreshSigs(); }
+  function resetSigs() { sig = {}; refreshSigs(); }
   function rowEmpty(rowId) { return ![...page.querySelectorAll(`.f1050-d[data-row="${rowId}"]`)].some(i => i.value); }
   function placeSig(sg, png, code) {
-    sig.png = png;
-    sig.placed.add(sg.id);
+    sig[sg.id] = png;
     // ช่องเลข 8 หลักใต้ลายเซ็น: ช่อง R = รหัสของฉัน, ช่อง L = รหัสสมาชิกในฟอร์ม; กรอกเมื่อยังว่างเท่านั้น
     if (rowEmpty(sg.code)) setDigits(sg.code, sg.id === 'R' ? code : current.d?.id);
     refreshSigs();
   }
   async function onSigBtn(sg) {
-    if (sig.placed.has(sg.id)) { sig.placed.delete(sg.id); refreshSigs(); return; }
+    if (sig[sg.id]) { delete sig[sg.id]; refreshSigs(); return; }
     if (!sigAllowed(sg)) return;
     let ms = mySig();
-    if (!sigPng() && current.opts.needSignature) {            // ยังไม่เคยตั้งลายเซ็น: เปิดตัวตั้งค่า แล้ววางต่อให้เลย
+    if (sg.id === 'L' && !isMe()) {                            // เจ้าของข้อมูลเซ็นเอง (วาด/อัปโหลด) ไม่เก็บลายเซ็นนี้ไว้ที่ไหน
+      const r = await window.openSignatureEditor({ oneOff: true, title: 'ลายมือชื่อผู้ยื่น (ให้เจ้าของข้อมูลเซ็น)' });
+      if (r?.png) placeSig(sg, r.png, null);
+      return;
+    }
+    if (!ms.png && current.opts.needSignature) {              // ยังไม่เคยตั้งลายเซ็น: เปิดตัวตั้งค่า แล้ววางต่อให้เลย
       const r = await current.opts.needSignature();
       if (!r?.png) return;
       current.opts.mySig = ms = { png: r.png, code: r.code, self: ms.self };
     }
-    if (sigPng()) placeSig(sg, sigPng(), ms?.code);
+    if (ms.png) placeSig(sg, ms.png, ms.code);
   }
 
   // ---------- รูปถ่าย ----------
@@ -487,7 +492,7 @@
     }
     page.querySelectorAll('.f1050-c[aria-pressed="true"]').forEach(b => ticks.push(b.dataset.id));
     const out = { text, digits, ticks };
-    if (sig.png && sig.placed.size) out.sig = { png: sig.png, slots: [...sig.placed] };
+    if (Object.keys(sig).length) out.sig = { ...sig };
     return out;
   }
 
@@ -496,8 +501,10 @@
     for (const [id, val] of Object.entries(v?.text || {})) { const i = textField(id); if (i && val) i.value = String(val); }
     for (const [row, s] of Object.entries(v?.digits || {})) setDigits(row, String(s));
     for (const id of v?.ticks || []) page.querySelector(`.f1050-c[data-id="${id}"]`)?.setAttribute('aria-pressed', 'true');
-    if (v?.sig?.png && typeof v.sig.png === 'string' && v.sig.png.startsWith('data:image/png;base64,')) {
-      sig = { png: v.sig.png, placed: new Set((v.sig.slots || []).filter(id => sigEls[id])) };
+    if (v?.sig) {
+      const okPng = u => typeof u === 'string' && u.startsWith('data:image/png;base64,');
+      if (okPng(v.sig.png)) for (const id of v.sig.slots || []) { if (sigEls[id]) sig[id] = v.sig.png; } // รูปแบบแรก (ลายเซ็นเดียววางหลายช่อง)
+      for (const id of Object.keys(sigEls)) if (okPng(v.sig[id])) sig[id] = v.sig[id];
     }
     refreshSigs();
   }
@@ -621,15 +628,16 @@
     if (photoUrl && ph) {
       try { ctx.drawImage(await loadImg(photoUrl), ph.x * kpt, ph.y * kpt, ph.w * kpt, ph.h * kpt); } catch { /* ไม่มีรูป: ข้าม */ }
     }
-    if (values?.sig?.png && FORMS[t].sigs) {
-      try {
-        const si = await loadImg(values.sig.png);
-        for (const sg of FORMS[t].sigs) {
-          if (!values.sig.slots?.includes(sg.id)) continue;
+    if (values?.sig && FORMS[t].sigs) {
+      for (const sg of FORMS[t].sigs) {
+        const u = values.sig[sg.id] || (values.sig.slots?.includes(sg.id) ? values.sig.png : null); // รูปแบบแรกใช้ png + slots
+        if (!u) continue;
+        try {
+          const si = await loadImg(u);
           const k = Math.min(sg.w / si.naturalWidth, sg.h / si.naturalHeight), w = si.naturalWidth * k, h = si.naturalHeight * k;
           ctx.drawImage(si, (sg.x + (sg.w - w) / 2) * kpt, (sg.y + sg.h - h) * kpt, w * kpt, h * kpt);
-        }
-      } catch { /* ลายเซ็นเสีย: ข้าม */ }
+        } catch { /* ลายเซ็นเสีย: ข้าม */ }
+      }
     }
     ctx.lineWidth = 1.7 * kpt;
     ctx.lineCap = 'round';
