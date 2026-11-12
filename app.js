@@ -265,6 +265,7 @@ async function start(s, retried = false) {
   BKKLoader.hide();
   renderScopeBadge();
   showAreasLink(s);
+  initSignatureButton();
   populateFilterOptions();
   if (!bindEvents.done) { bindEvents(); bindEvents.done = true; }
   applyFilters();
@@ -829,6 +830,64 @@ function bindInvite(body, rec) {
   });
 }
 
+// เรียก PostgREST ด้วย token ของผู้ใช้ (401 -> ต่ออายุแล้วลองใหม่หนึ่งครั้ง)
+async function restCall(path, init = {}, retried = false) {
+  const s = loadSession();
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { ...init, headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${s.access_token}`, ...init.headers } });
+  } catch { throw new Error('เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง'); }
+  if (res.status === 401 && !retried) {
+    const next = await refreshSession(s).catch(() => null);
+    if (next) { saveSession(next); return restCall(path, init, true); }
+  }
+  return res;
+}
+
+// ลายเซ็น + รหัส 8 หลักของฉัน (ตาราง member_signature, RLS = เห็นเฉพาะแถวตัวเอง); undefined = ยังไม่โหลด, null = ยังไม่เคยตั้ง
+let mySigCache;
+const myCode8 = () => String(myMtCo() || '').padStart(8, '0');
+async function loadMySignature(force) {
+  if (!force && mySigCache !== undefined) return mySigCache;
+  if (!myMtCo()) return (mySigCache = null);
+  const res = await restCall('member_signature?select=code,sig&limit=1');
+  if (!res.ok) throw new Error('โหลดลายเซ็นไม่สำเร็จ');
+  const row = (await res.json())[0];
+  return (mySigCache = row ? { png: row.sig, code: row.code } : null);
+}
+// เปิดหน้าต่างตั้งค่า; คืน { png, code } ที่บันทึก, หรือ null (ปิดเฉย ๆ / ลบ)
+async function openMySignature() {
+  const cur = await loadMySignature(true).catch(() => mySigCache || null);
+  const r = await window.openSignatureEditor({
+    png: cur?.png || null,
+    code: cur?.code || null,
+    defaultCode: myCode8(),
+    save: async ({ png, code }) => {
+      const res = await restCall('member_signature?on_conflict=mt_co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ mt_co: myMtCo(), code, sig: png, updated_at: new Date().toISOString() }),
+      });
+      if (!res.ok) throw new Error('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง');
+      mySigCache = { png, code };
+    },
+    remove: async () => {
+      const res = await restCall(`member_signature?mt_co=eq.${myMtCo()}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('ลบไม่สำเร็จ ลองใหม่อีกครั้ง');
+      mySigCache = null;
+    },
+  });
+  return r && r.png ? r : null;
+}
+function initSignatureButton() {
+  const b = document.getElementById('sigBtn');
+  if (!profile || profile.staff || !myMtCo() || initSignatureButton.done) return;
+  initSignatureButton.done = true;
+  b.hidden = false;
+  b.addEventListener('click', () => { openMySignature(); });
+  loadMySignature().catch(() => {}); // โหลดรอไว้ ตอนเปิดฟอร์มจะได้ไม่ต้องรอ
+}
+
 // เรียก Supabase Storage ด้วย token ของผู้ใช้ (401 -> ต่ออายุแล้วลองใหม่หนึ่งครั้ง)
 async function storageCall(path, init, retried = false) {
   const s = loadSession();
@@ -981,8 +1040,14 @@ function openDetail(rec) {
   });
   bindInvite(body, rec);
   loadForm1050History(rec, body.querySelector('#form1050History'));
-  body.querySelectorAll('[data-form]').forEach(btn => btn.addEventListener('click', () => {
+  body.querySelectorAll('[data-form]').forEach(btn => btn.addEventListener('click', async () => {
     const type = btn.dataset.form;
+    // ลายเซ็นของฉัน (เฉพาะแบบ 1050 และไม่ใช่ staff): โหลดจากฐานข้อมูลครั้งแรกครั้งเดียว ถ้าโหลดไม่ได้ก็เปิดฟอร์มต่อโดยไม่มีลายเซ็น
+    let mySig = null;
+    if (type === '1050' && profile && !profile.staff && myMtCo()) {
+      const saved = await loadMySignature().catch(() => null);
+      mySig = { png: saved?.png || null, code: saved?.code || myCode8(), self: myCode8() };
+    }
     const meRec = allRecords.find(r => r.mt_co === myMtCo()); // ผู้ใช้ที่ล็อกอิน (ใช้กรอก "รายละเอียดผู้ขอ" ในแบบ 1020)
     openForm(type, {
       id: String(rec.mt_co).padStart(8, '0'),
@@ -997,6 +1062,8 @@ function openDetail(rec) {
       me: meRec ? { id: String(meRec.mt_co).padStart(8, '0'), name: fullName(meRec), po: meRec.po_nt || '', rwp: meRec.rwp_nt || '', phak: meRec.phak_nt || '', khet: meRec.sh_nt || '' } : null,
     }, {
       refill: true,
+      mySig,
+      needSignature: mySig ? openMySignature : null,
       fileName: `${type}-${rec.mt_co}`,
       actions: [{
         label: 'ส่งไปหลังบ้าน',

@@ -8,7 +8,13 @@
   const SPECS = window.FORM_SPECS; // forms-spec.js สร้างโดย db/build_form_specs.py (ตำแหน่งช่องกรอกของแต่ละฟอร์ม หน่วย pt ของ PDF)
   // photo = ช่อง "ติดรูป" (pt) ถ้าฟอร์มนั้นมี (1050 เท่านั้น)
   const FORMS = {
-    '1050': { th: 'แบบติดต่องานทะเบียน 1050', short: '1050', image: 'assets/form1050.png', photo: { x: 474.5, y: 108.2, w: 80.7, h: 93.7 } },
+    '1050': { th: 'แบบติดต่องานทะเบียน 1050', short: '1050', image: 'assets/form1050.png', photo: { x: 474.5, y: 108.2, w: 80.7, h: 93.7 },
+      // ช่องลายเซ็น (pt): L = ลายมือชื่อผู้ยื่น (ใส่ได้เมื่อสมาชิกในฟอร์มคือตัวเอง), R = หัวหน้าลงชื่อรับรอง (ผู้ใช้ที่ล็อกอิน)
+      // code = แถวช่องเลข 8 หลักใต้ช่องนั้น, chip = ตำแหน่งปุ่ม "เซ็น" (อยู่นอกเส้นจุดเพื่อไม่บังช่องพิมพ์)
+      sigs: [
+        { id: 'L', x: 150, y: 727, w: 165, h: 24, code: 'id6b', chip: { x: 322, y: 733 } },
+        { id: 'R', x: 418, y: 686, w: 130, h: 20, code: 'id6a', chip: { x: 552, y: 689 } },
+      ] },
     '1020': { th: 'แบบขอเสนอหัวหน้า 1020', short: '1020', image: 'assets/form1020.png' },
     '2020': { th: 'แบบติดต่อบัตรสมาชิกบำรุง 2020', short: '2020', image: 'assets/form2020.png' },
   };
@@ -28,6 +34,8 @@
   const sizeCss = pt => `calc(${pt} * var(--pt))`;
 
   let dlg = null, page = null, fitBox = null, scroller = null, ro = null, fileInput = null, photoBox = null;
+  let sig = { png: null, placed: new Set() }; // ลายเซ็นที่วางในฟอร์ม (data URL PNG) + ช่องที่วางอยู่ ('L' | 'R')
+  let sigEls = {};                              // id -> { box, img, btn }
   let photo = { blob: null, url: null, existing: false, removed: false }; // existing = รูปที่โหลดมาจากหลังบ้าน
   let current = null;     // { d, opts }
   let busy = false;
@@ -102,8 +110,9 @@
     resetPhoto(false);                         // ล้างรูป/ต้นฉบับของฟอร์มก่อนหน้า (ถ้ามี)
     type = t;
     spec = SPECS[t];
-    page.querySelectorAll('.f1050-t, .f1050-d, .f1050-c, .f1050-photo').forEach(e => e.remove());
+    page.querySelectorAll('.f1050-t, .f1050-d, .f1050-c, .f1050-photo, .f1050-sig, .f1050-sigbtn').forEach(e => e.remove());
     photoBox = null;
+    sigEls = {};
     const bg = page.querySelector('img');
     bg.src = FORMS[t].image;
     bg.alt = FORMS[t].th;
@@ -156,6 +165,61 @@
       photoBox.querySelector('.f1050-photo-pick').addEventListener('click', () => fileInput.click());
       page.append(photoBox);
     }
+    for (const sg of FORMS[t].sigs || []) {
+      const box = document.createElement('div');
+      box.className = 'f1050-sig';
+      Object.assign(box.style, { left: pctX(sg.x), top: pctY(sg.y), width: pctX(sg.w), height: pctY(sg.h) });
+      const img = document.createElement('img');
+      img.alt = 'ลายเซ็น';
+      img.draggable = false;
+      img.hidden = true;
+      box.append(img);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'f1050-sigbtn';
+      btn.hidden = true;
+      Object.assign(btn.style, { left: pctX(sg.chip.x), top: pctY(sg.chip.y) });
+      btn.addEventListener('click', () => onSigBtn(sg));
+      page.append(box, btn);
+      sigEls[sg.id] = { box, img, btn };
+    }
+  }
+
+  // ---------- ลายเซ็น ----------
+  const mySig = () => current?.opts?.mySig || null;                 // { png|null, code, self } ของผู้ใช้ที่ล็อกอิน (self = เลขหมายประจำตัวจริง 8 หลัก) (ไม่มี = ไม่ให้เซ็น)
+  const sigPng = () => sig.png || mySig()?.png || null;
+  const sigAllowed = sg => !!mySig() && (sg.id === 'R' || mySig().self === current.d?.id); // ช่องผู้ยื่น (L) ให้เซ็นเฉพาะตอนสมาชิกในฟอร์มคือตัวเอง
+  function refreshSigs() {
+    for (const sg of FORMS[type]?.sigs || []) {
+      const e = sigEls[sg.id];
+      if (!e) continue;
+      const on = sig.placed.has(sg.id);
+      e.img.hidden = !on;
+      if (on) e.img.src = sig.png; else e.img.removeAttribute('src');
+      e.btn.hidden = !(on || sigAllowed(sg));
+      e.btn.textContent = on ? '× ลบ' : '+ เซ็น';
+      e.btn.setAttribute('aria-label', on ? 'เอาลายเซ็นออก' : 'ใส่ลายเซ็นของฉัน');
+    }
+  }
+  function resetSigs() { sig = { png: null, placed: new Set() }; refreshSigs(); }
+  function rowEmpty(rowId) { return ![...page.querySelectorAll(`.f1050-d[data-row="${rowId}"]`)].some(i => i.value); }
+  function placeSig(sg, png, code) {
+    sig.png = png;
+    sig.placed.add(sg.id);
+    // ช่องเลข 8 หลักใต้ลายเซ็น: ช่อง R = รหัสของฉัน, ช่อง L = รหัสสมาชิกในฟอร์ม; กรอกเมื่อยังว่างเท่านั้น
+    if (rowEmpty(sg.code)) setDigits(sg.code, sg.id === 'R' ? code : current.d?.id);
+    refreshSigs();
+  }
+  async function onSigBtn(sg) {
+    if (sig.placed.has(sg.id)) { sig.placed.delete(sg.id); refreshSigs(); return; }
+    if (!sigAllowed(sg)) return;
+    let ms = mySig();
+    if (!sigPng() && current.opts.needSignature) {            // ยังไม่เคยตั้งลายเซ็น: เปิดตัวตั้งค่า แล้ววางต่อให้เลย
+      const r = await current.opts.needSignature();
+      if (!r?.png) return;
+      current.opts.mySig = ms = { png: r.png, code: r.code, self: ms.self };
+    }
+    if (sigPng()) placeSig(sg, sigPng(), ms?.code);
   }
 
   // ---------- รูปถ่าย ----------
@@ -377,6 +441,7 @@
     page.querySelectorAll('.f1050-d').forEach(i => { i.value = ''; });
     page.querySelectorAll('.f1050-c').forEach(b => b.setAttribute('aria-pressed', 'false'));
     resetPhoto(false);
+    resetSigs();
   }
 
   const thaiToday = () => { const d = new Date(); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`; };
@@ -406,7 +471,7 @@
     },
   };
   const HINTS = {
-    '1050': 'ช่องส่วนบนสุดกรอกให้แล้ว คลิกช่องจุดไข่ปลาเพื่อพิมพ์หรือแก้ไข คลิกวงกลมเพื่อติ๊ก ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
+    '1050': 'ช่องส่วนบนสุดกรอกให้แล้ว คลิกช่องจุดไข่ปลาเพื่อพิมพ์หรือแก้ไข คลิกวงกลมเพื่อติ๊ก ปุ่ม "+ เซ็น" ข้างช่องลงชื่อใส่ลายเซ็นที่เก็บไว้ ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
     '1020': 'ลำดับที่ 1 และ "รายละเอียดผู้ขอ" กรอกให้แล้ว (ระบบการใหม่ หน้าที่เสนอใหม่ ลำดับที่ 2-4 กรอกเองได้) ทุกช่องแก้ไขได้ ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
     '2020': 'ใบแรกกรอกให้แล้ว (ใบที่ 2-3 กรอกเองได้ ติ๊กช่องที่ต้องการด้วย) ทุกช่องแก้ไขได้ ข้อมูลในหน้าต่างนี้ไม่ถูกเก็บไว้ ปิดแล้วหาย',
   };
@@ -421,7 +486,9 @@
       if (s.trim()) digits[b.id] = s;
     }
     page.querySelectorAll('.f1050-c[aria-pressed="true"]').forEach(b => ticks.push(b.dataset.id));
-    return { text, digits, ticks };
+    const out = { text, digits, ticks };
+    if (sig.png && sig.placed.size) out.sig = { png: sig.png, slots: [...sig.placed] };
+    return out;
   }
 
   function apply(v) {
@@ -429,6 +496,10 @@
     for (const [id, val] of Object.entries(v?.text || {})) { const i = textField(id); if (i && val) i.value = String(val); }
     for (const [row, s] of Object.entries(v?.digits || {})) setDigits(row, String(s));
     for (const id of v?.ticks || []) page.querySelector(`.f1050-c[data-id="${id}"]`)?.setAttribute('aria-pressed', 'true');
+    if (v?.sig?.png && typeof v.sig.png === 'string' && v.sig.png.startsWith('data:image/png;base64,')) {
+      sig = { png: v.sig.png, placed: new Set((v.sig.slots || []).filter(id => sigEls[id])) };
+    }
+    refreshSigs();
   }
 
   function setStatus(text, kind) {
@@ -550,6 +621,16 @@
     if (photoUrl && ph) {
       try { ctx.drawImage(await loadImg(photoUrl), ph.x * kpt, ph.y * kpt, ph.w * kpt, ph.h * kpt); } catch { /* ไม่มีรูป: ข้าม */ }
     }
+    if (values?.sig?.png && FORMS[t].sigs) {
+      try {
+        const si = await loadImg(values.sig.png);
+        for (const sg of FORMS[t].sigs) {
+          if (!values.sig.slots?.includes(sg.id)) continue;
+          const k = Math.min(sg.w / si.naturalWidth, sg.h / si.naturalHeight), w = si.naturalWidth * k, h = si.naturalHeight * k;
+          ctx.drawImage(si, (sg.x + (sg.w - w) / 2) * kpt, (sg.y + sg.h - h) * kpt, w * kpt, h * kpt);
+        }
+      } catch { /* ลายเซ็นเสีย: ข้าม */ }
+    }
     ctx.lineWidth = 1.7 * kpt;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -614,7 +695,14 @@
     dlg.querySelector('#f1050Hint').textContent = opts.hint || HINTS[t];
     setStatus('', '');
     busy = false;
-    if (opts.values) apply(opts.values); else fillFromMember(d);
+    if (opts.values) apply(opts.values);
+    else {
+      fillFromMember(d);
+      // ฟอร์มใหม่: ถ้ามีลายเซ็นเก็บไว้ ใส่ให้เลย (ช่องหัวหน้ารับรอง; ถ้าสมาชิกในฟอร์มคือตัวเองใส่ช่องผู้ยื่นแทน)
+      const ms = mySig();
+      if (ms?.png && FORMS[t].sigs) placeSig(FORMS[t].sigs.find(g => g.id === (ms.self === d?.id ? 'L' : 'R')), ms.png, ms.code);
+    }
+    refreshSigs();
     if (opts.photoUrl && photoBox) { photo = { blob: null, url: opts.photoUrl, existing: true, removed: false }; showPhoto(opts.photoUrl); }
     updatePhotoButtons();
     renderActions();

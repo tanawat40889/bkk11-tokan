@@ -165,3 +165,35 @@ dialog#formModal::backdrop { background: rgba(15, 18, 26, 0.6); }
 .f1050-history-title { margin: 0 0 6px; font-size: 0.85rem; font-weight: 600; color: var(--text-dim); }
 .f1050-history-item { padding: 8px 0; border-top: 1px solid var(--border); }
 .f1050-history-item p { margin: 2px 0; font-size: 0.82rem; color: var(--text-dim); }
+
+/* ---------- ลายเซ็นในฟอร์ม (ช่อง + ปุ่ม "เซ็น" ข้างเส้นจุด) ---------- */
+.f1050-sig { position: absolute; pointer-events: none; }
+.f1050-sig img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; display: block; user-select: none; }
+.f1050-sigbtn {
+  position: absolute; margin: 0; padding: calc(1.5 * var(--pt)) calc(4 * var(--pt)); border: 1px solid #0a2a6e; border-radius: calc(4 * var(--pt));
+  background: #fff; color: #0a2a6e; cursor: pointer; white-space: nowrap;
+  font-family: 'Prompt', system-ui, sans-serif; font-size: calc(8.5 * var(--pt)); line-height: 1.2;
+}
+.f1050-sig img[hidden], .f1050-sigbtn[hidden] { display: none; }
+.f1050-sigbtn:hover { background: #fef9c3; }
+
+/* ---------- หน้าต่าง "ลายเซ็นของฉัน" ---------- */
+dialog.sig-dlg { width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); }
+dialog.sig-dlg::backdrop { background: rgba(15, 18, 26, 0.6); }
+.sig-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sig-title { margin: 0; font-size: 1.1rem; }
+.sig-note { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.sig-pad { position: relative; border: 1px solid var(--border); border-radius: 10px; background: #fff; overflow: hidden; }
+.sig-pad canvas { display: block; width: 100%; aspect-ratio: 3 / 1; touch-action: none; cursor: crosshair; }
+.sig-line { position: absolute; left: 6%; right: 6%; bottom: 22%; border-bottom: 1px dashed #c3c8d4; pointer-events: none; }
+.sig-row, .sig-foot { display: flex; flex-wrap: wrap; gap: 8px; }
+.sig-btn { min-height: 40px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.9rem; cursor: pointer; }
+.sig-btn[hidden] { display: none; }
+.sig-btn:disabled { opacity: 0.5; cursor: default; }
+.sig-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.sig-danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); margin-left: auto; }
+.sig-code { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--text-dim); }
+.sig-code input { font-family: inherit; font-size: 1.1rem; letter-spacing: 0.15em; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 12em; }
+.sig-msg { margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 0.88rem; background: var(--note-bg); color: var(--note-fg); }
+.sig-msg.err { background: var(--danger-bg); color: var(--danger); }
+.sig-msg[hidden] { display: none; }

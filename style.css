@@ -871,6 +871,7 @@ dialog#detailModal::backdrop {
 
 .topbar .theme-btn { margin-left: auto; }
 .topbar .areas-link { margin-left: 0; text-decoration: none; }
+.topbar #sigBtn { margin-left: 0; }
 .topbar .theme-btn + .logout-btn { margin-left: 0; }
 
 .login-view .theme-btn {
