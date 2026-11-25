@@ -304,7 +304,7 @@ async function showAreasLink(s) {
 function personId(rec) { return String(rec.mt_co); }
 
 function fullName(rec) {
-  return [rec.name_t, rec.saku_t].filter(Boolean).join(' ');
+  return [rec.given_name, rec.family_name].filter(Boolean).join(' ');
 }
 
 function uniqueSorted(values) {
@@ -313,9 +313,9 @@ function uniqueSorted(values) {
 
 function populateFilterOptions() {
   document.getElementById('sortOrder').value = 'area';
-  fillSelect('filterKhet', uniqueSorted(allRecords.map(r => r.sh_nt)), 'เขต: ทั้งหมด');
-  fillSelect('filterFa', uniqueSorted(allRecords.map(r => r.fa_nt)), 'ฝ่าย: ทั้งหมด');
-  fillSelect('filterPo', uniqueSorted(allRecords.map(r => r.po_nt)), 'ตำแหน่ง: ทั้งหมด');
+  fillSelect('filterKhet', uniqueSorted(allRecords.map(r => r.khet_name)), 'เขต: ทั้งหมด');
+  fillSelect('filterFa', uniqueSorted(allRecords.map(r => r.division_name)), 'ฝ่าย: ทั้งหมด');
+  fillSelect('filterPo', uniqueSorted(allRecords.map(r => r.position_name)), 'ตำแหน่ง: ทั้งหมด');
 
   // Single-เขต scope: no need to let the user pick a different เขต.
   if (scope.khet !== 'all' && scope.khet.length === 1) {
@@ -330,20 +330,20 @@ function populateFilterOptions() {
 // เขต จำกัดตัวเลือกของตำบล และตำบล จำกัดตัวเลือกของหมู่ต่ออีกชั้น
 function updateDependentFilters() {
   const khet = document.getElementById('filterKhet').value;
-  const khetScoped = khet ? allRecords.filter(r => r.sh_nt === khet) : allRecords;
+  const khetScoped = khet ? allRecords.filter(r => r.khet_name === khet) : allRecords;
 
   const tambonSel = document.getElementById('filterTambon');
   const prevTambon = tambonSel.value;
-  const tambonOptions = uniqueSorted(khetScoped.map(r => r.ch_nt));
+  const tambonOptions = uniqueSorted(khetScoped.map(r => r.tambon_name));
   fillSelect('filterTambon', tambonOptions, 'ตำบล: ทั้งหมด');
   if (tambonOptions.includes(prevTambon)) tambonSel.value = prevTambon;
 
   const tambon = tambonSel.value;
-  const tambonScoped = tambon ? khetScoped.filter(r => r.ch_nt === tambon) : khetScoped;
+  const tambonScoped = tambon ? khetScoped.filter(r => r.tambon_name === tambon) : khetScoped;
 
   const mooSel = document.getElementById('filterMoo');
   const prevMoo = mooSel.value;
-  const mooOptions = uniqueSorted(tambonScoped.map(r => r.ha_nt));
+  const mooOptions = uniqueSorted(tambonScoped.map(r => r.moo_name));
   fillSelect('filterMoo', mooOptions, 'หมู่: ทั้งหมด');
   if (mooOptions.includes(prevMoo)) mooSel.value = prevMoo;
 }
@@ -412,13 +412,13 @@ function applyFilters() {
   const hasNoteOnly = document.getElementById('filterHasNote').checked;
 
   const result = allRecords.filter(r => {
-    if (khet && r.sh_nt !== khet) return false;
-    if (tambon && r.ch_nt !== tambon) return false;
-    if (moo && r.ha_nt !== moo) return false;
-    if (fa && r.fa_nt !== fa) return false;
-    if (po && r.po_nt !== po) return false;
+    if (khet && r.khet_name !== khet) return false;
+    if (tambon && r.tambon_name !== tambon) return false;
+    if (moo && r.moo_name !== moo) return false;
+    if (fa && r.division_name !== fa) return false;
+    if (po && r.position_name !== po) return false;
     if (sensei && (sensei === 'yes') !== senseiRoom.has(r.mt_co)) return false;
-    if (noPhotoOnly && r.pager !== 'ขาดรูปถ่าย') return false;
+    if (noPhotoOnly && r.photo_flag !== 'ขาดรูปถ่าย') return false;
     if (hasNoteOnly && !notes[personId(r)]?.text) return false;
     if (q && !fullName(r).toLowerCase().includes(q)) return false;
     return true;
@@ -468,7 +468,7 @@ async function loadAreaOrder() {
 
 // เทียบทีละระดับ: ถ้าทั้งสองฝั่งอยู่ในตาราง areas ใช้ sort_order ไม่เช่นนั้นใช้ลำดับสำรอง
 function compareArea(a, b) {
-  const lv = ['rwp_nt', 'phak_nt', 'sh_nt', 'ch_nt', 'ha_nt'];
+  const lv = ['rwp_name', 'phak_name', 'khet_name', 'tambon_name', 'moo_name'];
   for (let i = 1; i <= lv.length; i++) {
     const na = a[lv[i - 1]] || '', nb = b[lv[i - 1]] || '';
     if (na === nb) continue;
@@ -526,14 +526,14 @@ function renderCards(records) {
 // ป้ายหัวข้อคั่นในโหมดเรียงตามพื้นที่: ภาค[เขต]ตำบล[ค่า]หมู่[ค่า] เต็มเส้นทาง
 // (ไม่ใส่เขตซ้ำถ้าสิทธิ์ถูกล็อกไว้ที่เขตเดียวอยู่แล้ว เหมือนที่ทำกับบรรทัดข้อมูลแต่ละแถว)
 function areaGroupKey(rec) {
-  return [rec.phak_nt, khetIsLocked() ? '' : rec.sh_nt, rec.ch_nt, rec.ha_nt].join('|');
+  return [rec.phak_name, khetIsLocked() ? '' : rec.khet_name, rec.tambon_name, rec.moo_name].join('|');
 }
 
 function areaGroupLabel(rec) {
-  const parts = [`ภาค${rec.phak_nt || '-'}`];
-  if (!khetIsLocked()) parts.push(`เขต${rec.sh_nt || '-'}`);
-  parts.push(`ตำบล${rec.ch_nt || '-'}`);
-  parts.push(`หมู่${rec.ha_nt || '-'}`);
+  const parts = [`ภาค${rec.phak_name || '-'}`];
+  if (!khetIsLocked()) parts.push(`เขต${rec.khet_name || '-'}`);
+  parts.push(`ตำบล${rec.tambon_name || '-'}`);
+  parts.push(`หมู่${rec.moo_name || '-'}`);
   return parts.join(' ');
 }
 
@@ -570,12 +570,12 @@ function buildCard(rec) {
   const note = notes[personId(rec)];
 
   const locationParts = [];
-  if (!khetIsLocked()) locationParts.push(`เขต ${rec.sh_nt || '-'}`);
-  locationParts.push(`ตำบล ${rec.ch_nt || '-'}`);
-  locationParts.push(`หมู่ ${rec.ha_nt || '-'}`);
+  if (!khetIsLocked()) locationParts.push(`เขต ${rec.khet_name || '-'}`);
+  locationParts.push(`ตำบล ${rec.tambon_name || '-'}`);
+  locationParts.push(`หมู่ ${rec.moo_name || '-'}`);
 
-  const goShort = GO_SHORT[rec.go_nt] || rec.go_nt || '';
-  const faText = [rec.fa_nt, goShort].filter(Boolean).join(' · ');
+  const goShort = GO_SHORT[rec.member_status] || rec.member_status || '';
+  const faText = [rec.division_name, goShort].filter(Boolean).join(' · ');
 
   el.innerHTML = `
     <div class="friend-info">
@@ -585,7 +585,7 @@ function buildCard(rec) {
       ${note?.text ? `<div class="card-note-preview">${escapeHtml(truncate(note.text, 80))}</div>` : ''}
     </div>
     <div class="friend-side">
-      ${rec.po_nt ? `<span class="pill pill-role">${escapeHtml(rec.po_nt)}</span>` : ''}
+      ${rec.position_name ? `<span class="pill pill-role">${escapeHtml(rec.position_name)}</span>` : ''}
       ${faText ? `<span class="pill pill-fa">${escapeHtml(faText)}</span>` : ''}
     </div>
   `;
@@ -660,7 +660,7 @@ const myMtCo = () => Number(jwtClaims(loadSession()?.access_token).app_metadata?
 
 function inviteSectionHtml(rec) {
   if (!profile || profile.staff || myMtCo() === rec.mt_co) return '';
-  const lv = levelOfPo(rec.po_nt);
+  const lv = levelOfPo(rec.position_name);
   let reason = '';
   if (!lv) reason = 'คนนี้ไม่มีตำแหน่ง จึงเข้าระบบไม่ได้';
   else if (LEVEL_RANK[lv] > LEVEL_RANK[profile.level]) reason = 'ตำแหน่งของคนนี้สูงกว่าคุณ จึงออกลิงก์ให้ไม่ได้';
@@ -972,26 +972,26 @@ function openDetail(rec) {
 
   const rows = [
     ['รหัสสมาชิก', rec.mt_co],
-    ['รหัสหัวหน้าครอบครัว', rec.amt_co],
-    ['เขต', rec.sh_nt],
-    ['ตำบล', rec.ch_nt],
-    ['หมู่', rec.ha_nt],
-    ['ฝ่าย', rec.fa_nt],
-    ['ตำแหน่ง', rec.po_nt],
-    ['สถานะโงะฮนซน', rec.go_nt],
+    ['รหัสหัวหน้าครอบครัว', rec.family_head_code],
+    ['เขต', rec.khet_name],
+    ['ตำบล', rec.tambon_name],
+    ['หมู่', rec.moo_name],
+    ['ฝ่าย', rec.division_name],
+    ['ตำแหน่ง', rec.position_name],
+    ['สถานะโงะฮนซน', rec.member_status],
     ['ห้องที่ระลึก อ. ผู้มีพระคุณ', senseiText(rec)],
     ['หมายเหตุระบบ (an_co)', rec.an_co],
-    ['รูปถ่าย', rec.pager ? 'ขาดรูปถ่าย' : 'มีรูปถ่าย'],
-    ['ชื่อเดิม', rec.name_t_o],
-    ['นามสกุลเดิม', rec.saku_t_o],
+    ['รูปถ่าย', rec.photo_flag ? 'ขาดรูปถ่าย' : 'มีรูปถ่าย'],
+    ['ชื่อเดิม', rec.given_name_original],
+    ['นามสกุลเดิม', rec.family_name_original],
     ['ไฟล์ต้นทาง', rec.source_file],
   ].filter(([, v]) => v !== null && v !== undefined && v !== '');
 
-  const familyMembers = rec.amt_co == null ? [] : allRecords.filter(r => r.amt_co === rec.amt_co && personId(r) !== id);
+  const familyMembers = rec.family_head_code == null ? [] : allRecords.filter(r => r.family_head_code === rec.family_head_code && personId(r) !== id);
 
   body.innerHTML = `
     <div class="modal-title">${escapeHtml(fullName(rec))}</div>
-    <div class="modal-sub">${escapeHtml(rec.po_nt || rec.fa_nt || '')}</div>
+    <div class="modal-sub">${escapeHtml(rec.position_name || rec.division_name || '')}</div>
     <dl class="detail-grid">
       ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
     </dl>
@@ -1008,7 +1008,7 @@ function openDetail(rec) {
           ${familyMembers.map(m => `
             <button type="button" class="family-item" data-family="${escapeHtml(personId(m))}">
               <span class="family-name">${escapeHtml(fullName(m))}</span>
-              <span class="family-role">${escapeHtml(m.po_nt || m.fa_nt || '')}</span>
+              <span class="family-role">${escapeHtml(m.position_name || m.division_name || '')}</span>
             </button>
           `).join('')}
         </div>
@@ -1052,14 +1052,14 @@ function openDetail(rec) {
     openForm(type, {
       id: String(rec.mt_co).padStart(8, '0'),
       name: fullName(rec),
-      rwp: rec.rwp_nt || '',
-      phak: rec.phak_nt || '',
-      khet: rec.sh_nt || '',
-      tambon: rec.ch_nt || '',
-      moo: rec.ha_nt || '',
-      fa: rec.fa_nt || '',
-      po: rec.po_nt || '',
-      me: meRec ? { id: String(meRec.mt_co).padStart(8, '0'), name: fullName(meRec), po: meRec.po_nt || '', rwp: meRec.rwp_nt || '', phak: meRec.phak_nt || '', khet: meRec.sh_nt || '' } : null,
+      rwp: rec.rwp_name || '',
+      phak: rec.phak_name || '',
+      khet: rec.khet_name || '',
+      tambon: rec.tambon_name || '',
+      moo: rec.moo_name || '',
+      fa: rec.division_name || '',
+      po: rec.position_name || '',
+      me: meRec ? { id: String(meRec.mt_co).padStart(8, '0'), name: fullName(meRec), po: meRec.position_name || '', rwp: meRec.rwp_name || '', phak: meRec.phak_name || '', khet: meRec.khet_name || '' } : null,
     }, {
       refill: true,
       mySig,

@@ -345,7 +345,7 @@ function renderMismatch() {
   badge.textContent = mismatches.length;
   if (!mismatches.length) return list.append(el('p', 'ok-note', 'ชื่อพื้นที่ทุกแห่งในข้อมูลสมาชิก ตรงกับโครงสร้างแล้ว'));
   mismatches.forEach(m => {
-    const names = [m.rwp_nt, m.phak_nt, m.sh_nt, m.ch_nt, m.ha_nt];
+    const names = [m.rwp_name, m.phak_name, m.khet_name, m.tambon_name, m.moo_name];
     const bad = LEVELS.indexOf(m.bad_level);
     const card = el('div', 'mm');
     card.append(el('p', 'mm-title', `${LEVEL_TH[m.bad_level]} "${names[bad]}" ยังไม่มีในโครงสร้าง`));
@@ -375,10 +375,10 @@ async function renderAccess() {
     const state = new Map((await rpc('access_list')).map(r => [r.mt_co, r]));
     let rows;
     if (q) {
-      const m = await api(`tokan?select=mt_co,name_t,saku_t,po_nt,fa_nt,sh_nt,ch_nt,ha_nt&or=(name_t.ilike.*${encodeURIComponent(q)}*,saku_t.ilike.*${encodeURIComponent(q)}*)&order=name_t&limit=20`);
+      const m = await api(`tokan?select=mt_co,given_name,family_name,position_name,division_name,khet_name,tambon_name,moo_name&or=(given_name.ilike.*${encodeURIComponent(q)}*,family_name.ilike.*${encodeURIComponent(q)}*)&order=given_name&limit=20`);
       rows = m.map(x => state.get(x.mt_co) || {
-        mt_co: x.mt_co, name: [x.name_t, x.saku_t].filter(Boolean).join(' '), po: x.po_nt, fa: x.fa_nt,
-        area: [x.sh_nt, x.ch_nt, x.ha_nt].filter(Boolean).join(' › '), link_state: null, blocked: false,
+        mt_co: x.mt_co, name: [x.given_name, x.family_name].filter(Boolean).join(' '), po: x.position_name, fa: x.division_name,
+        area: [x.khet_name, x.tambon_name, x.moo_name].filter(Boolean).join(' › '), link_state: null, blocked: false,
       });
     } else rows = [...state.values()];
     list.replaceChildren();
